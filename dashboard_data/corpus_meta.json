@@ -1,0 +1,10 @@
+{
+  "total_papers": 68917,
+  "non_review": 59599,
+  "reviews": 9318,
+  "decision_y": 31559,
+  "decision_y_pct_of_non_review": 0.5295,
+  "n_services": 22,
+  "dataset_version": "2025-05",
+  "generated_at": "2026-07-07T05:03:32+00:00"
+}

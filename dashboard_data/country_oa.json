@@ -1,0 +1,155 @@
+{
+  "countries": [
+    {
+      "country": "China",
+      "region": "Global South",
+      "replace_papers": 7199,
+      "open_access_pct": 21.2
+    },
+    {
+      "country": "United States",
+      "region": "Global North",
+      "replace_papers": 2645,
+      "open_access_pct": 44.9
+    },
+    {
+      "country": "India",
+      "region": "Global South",
+      "replace_papers": 973,
+      "open_access_pct": 17.8
+    },
+    {
+      "country": "Germany",
+      "region": "Global North",
+      "replace_papers": 712,
+      "open_access_pct": 44.7
+    },
+    {
+      "country": "South Korea",
+      "region": "Global North",
+      "replace_papers": 583,
+      "open_access_pct": 24.5
+    },
+    {
+      "country": "Italy",
+      "region": "Global North",
+      "replace_papers": 520,
+      "open_access_pct": 48.3
+    },
+    {
+      "country": "Japan",
+      "region": "Global North",
+      "replace_papers": 518,
+      "open_access_pct": 32.6
+    },
+    {
+      "country": "United Kingdom",
+      "region": "Global North",
+      "replace_papers": 516,
+      "open_access_pct": 64.9
+    },
+    {
+      "country": "France",
+      "region": "Global North",
+      "replace_papers": 493,
+      "open_access_pct": 47.5
+    },
+    {
+      "country": "Spain",
+      "region": "Global North",
+      "replace_papers": 307,
+      "open_access_pct": 55.7
+    },
+    {
+      "country": "Australia",
+      "region": "Global North",
+      "replace_papers": 270,
+      "open_access_pct": 40.0
+    },
+    {
+      "country": "Brazil",
+      "region": "Global South",
+      "replace_papers": 245,
+      "open_access_pct": 32.2
+    },
+    {
+      "country": "Taiwan",
+      "region": "Global South",
+      "replace_papers": 234,
+      "open_access_pct": 28.6
+    },
+    {
+      "country": "Iran",
+      "region": "Global South",
+      "replace_papers": 221,
+      "open_access_pct": 20.4
+    },
+    {
+      "country": "Canada",
+      "region": "Global North",
+      "replace_papers": 216,
+      "open_access_pct": 27.8
+    },
+    {
+      "country": "Switzerland",
+      "region": "Global North",
+      "replace_papers": 190,
+      "open_access_pct": 53.7
+    },
+    {
+      "country": "Singapore",
+      "region": "Global North",
+      "replace_papers": 177,
+      "open_access_pct": 28.2
+    },
+    {
+      "country": "Netherlands",
+      "region": "Global North",
+      "replace_papers": 154,
+      "open_access_pct": 75.3
+    },
+    {
+      "country": "Turkey",
+      "region": "Global South",
+      "replace_papers": 144,
+      "open_access_pct": 29.9
+    },
+    {
+      "country": "Portugal",
+      "region": "Global North",
+      "replace_papers": 140,
+      "open_access_pct": 50.7
+    },
+    {
+      "country": "Russia",
+      "region": "Global South",
+      "replace_papers": 130,
+      "open_access_pct": 30.8
+    },
+    {
+      "country": "Sweden",
+      "region": "Global North",
+      "replace_papers": 108,
+      "open_access_pct": 41.7
+    },
+    {
+      "country": "Poland",
+      "region": "Global North",
+      "replace_papers": 99,
+      "open_access_pct": 52.5
+    },
+    {
+      "country": "Israel",
+      "region": "Global North",
+      "replace_papers": 93,
+      "open_access_pct": 37.6
+    },
+    {
+      "country": "Austria",
+      "region": "Global North",
+      "replace_papers": 82,
+      "open_access_pct": 57.3
+    }
+  ],
+  "generated_at": "2026-07-15T04:51:01+00:00"
+}
