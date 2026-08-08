@@ -1,0 +1,129 @@
+{
+  "top_25_co_occurrence_pairs": [
+    {
+      "category_1": "Materials Science, Multidisciplinary",
+      "category_2": "Nanoscience & Nanotechnology",
+      "count": 4246
+    },
+    {
+      "category_1": "Chemistry, Physical",
+      "category_2": "Materials Science, Multidisciplinary",
+      "count": 3427
+    },
+    {
+      "category_1": "Chemistry, Multidisciplinary",
+      "category_2": "Materials Science, Multidisciplinary",
+      "count": 3252
+    },
+    {
+      "category_1": "Engineering, Biomedical",
+      "category_2": "Materials Science, Biomaterials",
+      "count": 2950
+    },
+    {
+      "category_1": "Materials Science, Multidisciplinary",
+      "category_2": "Physics, Applied",
+      "count": 2780
+    },
+    {
+      "category_1": "Chemistry, Multidisciplinary",
+      "category_2": "Nanoscience & Nanotechnology",
+      "count": 2594
+    },
+    {
+      "category_1": "Chemistry, Multidisciplinary",
+      "category_2": "Chemistry, Physical",
+      "count": 2254
+    },
+    {
+      "category_1": "Nanoscience & Nanotechnology",
+      "category_2": "Physics, Applied",
+      "count": 2205
+    },
+    {
+      "category_1": "Chemistry, Physical",
+      "category_2": "Nanoscience & Nanotechnology",
+      "count": 2198
+    },
+    {
+      "category_1": "Chemistry, Physical",
+      "category_2": "Physics, Applied",
+      "count": 2035
+    },
+    {
+      "category_1": "Physics, Applied",
+      "category_2": "Physics, Condensed Matter",
+      "count": 2006
+    },
+    {
+      "category_1": "Chemistry, Physical",
+      "category_2": "Physics, Condensed Matter",
+      "count": 1902
+    },
+    {
+      "category_1": "Chemistry, Multidisciplinary",
+      "category_2": "Physics, Applied",
+      "count": 1816
+    },
+    {
+      "category_1": "Materials Science, Multidisciplinary",
+      "category_2": "Physics, Condensed Matter",
+      "count": 1773
+    },
+    {
+      "category_1": "Nanoscience & Nanotechnology",
+      "category_2": "Physics, Condensed Matter",
+      "count": 1517
+    },
+    {
+      "category_1": "Chemistry, Multidisciplinary",
+      "category_2": "Physics, Condensed Matter",
+      "count": 1509
+    },
+    {
+      "category_1": "Biochemistry & Molecular Biology",
+      "category_2": "Polymer Science",
+      "count": 718
+    },
+    {
+      "category_1": "Engineering, Chemical",
+      "category_2": "Engineering, Environmental",
+      "count": 680
+    },
+    {
+      "category_1": "Engineering, Multidisciplinary",
+      "category_2": "Materials Science, Biomaterials",
+      "count": 568
+    },
+    {
+      "category_1": "Cell & Tissue Engineering",
+      "category_2": "Engineering, Biomedical",
+      "count": 516
+    },
+    {
+      "category_1": "Chemistry, Applied",
+      "category_2": "Polymer Science",
+      "count": 507
+    },
+    {
+      "category_1": "Cell & Tissue Engineering",
+      "category_2": "Cell Biology",
+      "count": 496
+    },
+    {
+      "category_1": "Cell Biology",
+      "category_2": "Engineering, Biomedical",
+      "count": 456
+    },
+    {
+      "category_1": "Chemistry, Organic",
+      "category_2": "Polymer Science",
+      "count": 401
+    },
+    {
+      "category_1": "Materials Science, Biomaterials",
+      "category_2": "Nanoscience & Nanotechnology",
+      "count": 400
+    }
+  ]
+}

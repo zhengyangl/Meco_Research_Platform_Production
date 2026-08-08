@@ -1,0 +1,618 @@
+{
+  "n_replace_abstracts": 17242,
+  "n_support_abstracts": 980,
+  "min_abstract_chars": 100,
+  "unigrams": {
+    "replace_leaning": [
+      {
+        "term": "sic",
+        "display": "sic",
+        "replace_count": 1301,
+        "support_count": 0,
+        "replace_per_1k": 75.46,
+        "support_per_1k": 0.0,
+        "log_ratio": 6.627,
+        "total_count": 1301
+      },
+      {
+        "term": "photocatalytic",
+        "display": "photocatalytic",
+        "replace_count": 664,
+        "support_count": 0,
+        "replace_per_1k": 38.51,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.956,
+        "total_count": 664
+      },
+      {
+        "term": "zno",
+        "display": "zno",
+        "replace_count": 617,
+        "support_count": 0,
+        "replace_per_1k": 35.78,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.883,
+        "total_count": 617
+      },
+      {
+        "term": "agnp",
+        "display": "agnps",
+        "replace_count": 616,
+        "support_count": 0,
+        "replace_per_1k": 35.73,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.881,
+        "total_count": 616
+      },
+      {
+        "term": "ros",
+        "display": "ros",
+        "replace_count": 536,
+        "support_count": 0,
+        "replace_per_1k": 31.09,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.743,
+        "total_count": 536
+      },
+      {
+        "term": "porphyrin",
+        "display": "porphyrin",
+        "replace_count": 460,
+        "support_count": 0,
+        "replace_per_1k": 26.68,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.59,
+        "total_count": 460
+      },
+      {
+        "term": "photothermal",
+        "display": "photothermal",
+        "replace_count": 444,
+        "support_count": 0,
+        "replace_per_1k": 25.75,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.555,
+        "total_count": 444
+      },
+      {
+        "term": "nanochannel",
+        "display": "nanochannels",
+        "replace_count": 384,
+        "support_count": 0,
+        "replace_per_1k": 22.27,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.41,
+        "total_count": 384
+      },
+      {
+        "term": "zif",
+        "display": "zif",
+        "replace_count": 363,
+        "support_count": 0,
+        "replace_per_1k": 21.05,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.354,
+        "total_count": 363
+      },
+      {
+        "term": "nanozym",
+        "display": "nanozymes",
+        "replace_count": 359,
+        "support_count": 0,
+        "replace_per_1k": 20.82,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.343,
+        "total_count": 359
+      },
+      {
+        "term": "as-prepar",
+        "display": "as-prepared",
+        "replace_count": 350,
+        "support_count": 0,
+        "replace_per_1k": 20.3,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.318,
+        "total_count": 350
+      },
+      {
+        "term": "nanozyme",
+        "display": "nanozyme",
+        "replace_count": 346,
+        "support_count": 0,
+        "replace_per_1k": 20.07,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.307,
+        "total_count": 346
+      },
+      {
+        "term": "mip",
+        "display": "mip",
+        "replace_count": 336,
+        "support_count": 0,
+        "replace_per_1k": 19.49,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.277,
+        "total_count": 336
+      },
+      {
+        "term": "mof",
+        "display": "mof",
+        "replace_count": 320,
+        "support_count": 0,
+        "replace_per_1k": 18.56,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.229,
+        "total_count": 320
+      },
+      {
+        "term": "molecularly",
+        "display": "molecularly",
+        "replace_count": 313,
+        "support_count": 0,
+        "replace_per_1k": 18.15,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.207,
+        "total_count": 313
+      },
+      {
+        "term": "dress",
+        "display": "dressing",
+        "replace_count": 309,
+        "support_count": 0,
+        "replace_per_1k": 17.92,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.194,
+        "total_count": 309
+      },
+      {
+        "term": "photocatalyst",
+        "display": "photocatalyst",
+        "replace_count": 307,
+        "support_count": 0,
+        "replace_per_1k": 17.81,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.188,
+        "total_count": 307
+      },
+      {
+        "term": "metal-organic",
+        "display": "metal-organic",
+        "replace_count": 270,
+        "support_count": 0,
+        "replace_per_1k": 15.66,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.06,
+        "total_count": 270
+      },
+      {
+        "term": "electrocatalyst",
+        "display": "electrocatalysts",
+        "replace_count": 267,
+        "support_count": 0,
+        "replace_per_1k": 15.49,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.049,
+        "total_count": 267
+      },
+      {
+        "term": "nanorod",
+        "display": "nanorods",
+        "replace_count": 264,
+        "support_count": 0,
+        "replace_per_1k": 15.31,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.038,
+        "total_count": 264
+      }
+    ],
+    "support_leaning": [
+      {
+        "term": "noise",
+        "display": "noise",
+        "replace_count": 77,
+        "support_count": 71,
+        "replace_per_1k": 4.47,
+        "support_per_1k": 72.45,
+        "log_ratio": -2.766,
+        "total_count": 148
+      },
+      {
+        "term": "drag",
+        "display": "drag",
+        "replace_count": 146,
+        "support_count": 113,
+        "replace_per_1k": 8.47,
+        "support_per_1k": 115.31,
+        "log_ratio": -2.6,
+        "total_count": 259
+      },
+      {
+        "term": "aerodynamic",
+        "display": "aerodynamic",
+        "replace_count": 86,
+        "support_count": 60,
+        "replace_per_1k": 4.99,
+        "support_per_1k": 61.22,
+        "log_ratio": -2.489,
+        "total_count": 146
+      },
+      {
+        "term": "lift",
+        "display": "lift",
+        "replace_count": 78,
+        "support_count": 50,
+        "replace_per_1k": 4.52,
+        "support_per_1k": 51.02,
+        "log_ratio": -2.403,
+        "total_count": 128
+      },
+      {
+        "term": "vortex",
+        "display": "vortex",
+        "replace_count": 85,
+        "support_count": 47,
+        "replace_per_1k": 4.93,
+        "support_per_1k": 47.96,
+        "log_ratio": -2.257,
+        "total_count": 132
+      },
+      {
+        "term": "boundary",
+        "display": "boundary",
+        "replace_count": 97,
+        "support_count": 52,
+        "replace_per_1k": 5.63,
+        "support_per_1k": 53.06,
+        "log_ratio": -2.228,
+        "total_count": 149
+      },
+      {
+        "term": "topographical",
+        "display": "topographical",
+        "replace_count": 70,
+        "support_count": 35,
+        "replace_per_1k": 4.06,
+        "support_per_1k": 35.71,
+        "log_ratio": -2.153,
+        "total_count": 105
+      },
+      {
+        "term": "edge",
+        "display": "edge",
+        "replace_count": 102,
+        "support_count": 50,
+        "replace_per_1k": 5.92,
+        "support_per_1k": 51.02,
+        "log_ratio": -2.14,
+        "total_count": 152
+      },
+      {
+        "term": "diatom",
+        "display": "diatoms",
+        "replace_count": 82,
+        "support_count": 40,
+        "replace_per_1k": 4.76,
+        "support_per_1k": 40.82,
+        "log_ratio": -2.131,
+        "total_count": 122
+      },
+      {
+        "term": "shark",
+        "display": "shark",
+        "replace_count": 70,
+        "support_count": 34,
+        "replace_per_1k": 4.06,
+        "support_per_1k": 34.69,
+        "log_ratio": -2.124,
+        "total_count": 104
+      },
+      {
+        "term": "project",
+        "display": "project",
+        "replace_count": 80,
+        "support_count": 37,
+        "replace_per_1k": 4.64,
+        "support_per_1k": 37.76,
+        "log_ratio": -2.078,
+        "total_count": 117
+      },
+      {
+        "term": "soil",
+        "display": "soil",
+        "replace_count": 161,
+        "support_count": 73,
+        "replace_per_1k": 9.34,
+        "support_per_1k": 74.49,
+        "log_ratio": -2.067,
+        "total_count": 234
+      },
+      {
+        "term": "sustainability",
+        "display": "sustainability",
+        "replace_count": 87,
+        "support_count": 36,
+        "replace_per_1k": 5.05,
+        "support_per_1k": 36.73,
+        "log_ratio": -1.968,
+        "total_count": 123
+      },
+      {
+        "term": "ecological",
+        "display": "ecological",
+        "replace_count": 72,
+        "support_count": 29,
+        "replace_per_1k": 4.18,
+        "support_per_1k": 29.59,
+        "log_ratio": -1.938,
+        "total_count": 101
+      },
+      {
+        "term": "fibronectin",
+        "display": "fibronectin",
+        "replace_count": 73,
+        "support_count": 29,
+        "replace_per_1k": 4.23,
+        "support_per_1k": 29.59,
+        "log_ratio": -1.924,
+        "total_count": 102
+      },
+      {
+        "term": "islet",
+        "display": "islet",
+        "replace_count": 76,
+        "support_count": 29,
+        "replace_per_1k": 4.41,
+        "support_per_1k": 29.59,
+        "log_ratio": -1.885,
+        "total_count": 105
+      },
+      {
+        "term": "understood",
+        "display": "understood",
+        "replace_count": 98,
+        "support_count": 37,
+        "replace_per_1k": 5.68,
+        "support_per_1k": 37.76,
+        "log_ratio": -1.879,
+        "total_count": 135
+      },
+      {
+        "term": "integrin",
+        "display": "integrin",
+        "replace_count": 98,
+        "support_count": 36,
+        "replace_per_1k": 5.68,
+        "support_per_1k": 36.73,
+        "log_ratio": -1.851,
+        "total_count": 134
+      },
+      {
+        "term": "bioavailability",
+        "display": "bioavailability",
+        "replace_count": 74,
+        "support_count": 26,
+        "replace_per_1k": 4.29,
+        "support_per_1k": 26.53,
+        "log_ratio": -1.802,
+        "total_count": 100
+      },
+      {
+        "term": "topography",
+        "display": "topography",
+        "replace_count": 210,
+        "support_count": 72,
+        "replace_per_1k": 12.18,
+        "support_per_1k": 73.47,
+        "log_ratio": -1.79,
+        "total_count": 282
+      }
+    ]
+  },
+  "bigrams": {
+    "replace_leaning": [
+      {
+        "term": "sic sic",
+        "display": "sic sic",
+        "replace_count": 1187,
+        "support_count": 0,
+        "replace_per_1k": 68.84,
+        "support_per_1k": 0.0,
+        "log_ratio": 6.536,
+        "total_count": 1187
+      },
+      {
+        "term": "water contact",
+        "display": "water contact",
+        "replace_count": 435,
+        "support_count": 0,
+        "replace_per_1k": 25.23,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.535,
+        "total_count": 435
+      },
+      {
+        "term": "antibacterial activity",
+        "display": "antibacterial activity",
+        "replace_count": 349,
+        "support_count": 0,
+        "replace_per_1k": 20.24,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.315,
+        "total_count": 349
+      },
+      {
+        "term": "reactive oxygen",
+        "display": "reactive oxygen",
+        "replace_count": 337,
+        "support_count": 0,
+        "replace_per_1k": 19.55,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.28,
+        "total_count": 337
+      },
+      {
+        "term": "oxygen species",
+        "display": "oxygen species",
+        "replace_count": 334,
+        "support_count": 0,
+        "replace_per_1k": 19.37,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.272,
+        "total_count": 334
+      },
+      {
+        "term": "electron transfer",
+        "display": "electron transfer",
+        "replace_count": 328,
+        "support_count": 0,
+        "replace_per_1k": 19.02,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.253,
+        "total_count": 328
+      },
+      {
+        "term": "molecularly imprinted",
+        "display": "molecularly imprinted",
+        "replace_count": 287,
+        "support_count": 0,
+        "replace_per_1k": 16.65,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.121,
+        "total_count": 287
+      },
+      {
+        "term": "active sites",
+        "display": "active sites",
+        "replace_count": 274,
+        "support_count": 0,
+        "replace_per_1k": 15.89,
+        "support_per_1k": 0.0,
+        "log_ratio": 5.075,
+        "total_count": 274
+      },
+      {
+        "term": "visible light",
+        "display": "visible light",
+        "replace_count": 253,
+        "support_count": 0,
+        "replace_per_1k": 14.67,
+        "support_per_1k": 0.0,
+        "log_ratio": 4.995,
+        "total_count": 253
+      },
+      {
+        "term": "carbon nanotubes",
+        "display": "carbon nanotubes",
+        "replace_count": 229,
+        "support_count": 0,
+        "replace_per_1k": 13.28,
+        "support_per_1k": 0.0,
+        "log_ratio": 4.896,
+        "total_count": 229
+      }
+    ],
+    "support_leaning": [
+      {
+        "term": "drag reduction",
+        "display": "drag reduction",
+        "replace_count": 78,
+        "support_count": 57,
+        "replace_per_1k": 4.52,
+        "support_per_1k": 58.16,
+        "log_ratio": -2.534,
+        "total_count": 135
+      },
+      {
+        "term": "flow field",
+        "display": "flow field",
+        "replace_count": 42,
+        "support_count": 24,
+        "replace_per_1k": 2.44,
+        "support_per_1k": 24.49,
+        "log_ratio": -2.272,
+        "total_count": 66
+      },
+      {
+        "term": "tissue culture",
+        "display": "tissue culture",
+        "replace_count": 44,
+        "support_count": 19,
+        "replace_per_1k": 2.55,
+        "support_per_1k": 19.39,
+        "log_ratio": -1.995,
+        "total_count": 63
+      },
+      {
+        "term": "shark skin",
+        "display": "shark skin",
+        "replace_count": 44,
+        "support_count": 19,
+        "replace_per_1k": 2.55,
+        "support_per_1k": 19.39,
+        "log_ratio": -1.995,
+        "total_count": 63
+      },
+      {
+        "term": "culture medium",
+        "display": "culture medium",
+        "replace_count": 45,
+        "support_count": 16,
+        "replace_per_1k": 2.61,
+        "support_per_1k": 16.33,
+        "log_ratio": -1.802,
+        "total_count": 61
+      },
+      {
+        "term": "shear stress",
+        "display": "shear stress",
+        "replace_count": 104,
+        "support_count": 36,
+        "replace_per_1k": 6.03,
+        "support_per_1k": 36.73,
+        "log_ratio": -1.793,
+        "total_count": 140
+      },
+      {
+        "term": "fluid dynamics",
+        "display": "fluid dynamics",
+        "replace_count": 63,
+        "support_count": 19,
+        "replace_per_1k": 3.65,
+        "support_per_1k": 19.39,
+        "log_ratio": -1.647,
+        "total_count": 82
+      },
+      {
+        "term": "vitro models",
+        "display": "vitro models",
+        "replace_count": 70,
+        "support_count": 21,
+        "replace_per_1k": 4.06,
+        "support_per_1k": 21.43,
+        "log_ratio": -1.644,
+        "total_count": 91
+      },
+      {
+        "term": "biomimetic surfaces",
+        "display": "biomimetic surfaces",
+        "replace_count": 53,
+        "support_count": 16,
+        "replace_per_1k": 3.07,
+        "support_per_1k": 16.33,
+        "log_ratio": -1.644,
+        "total_count": 69
+      },
+      {
+        "term": "underwater vehicles",
+        "display": "underwater vehicles",
+        "replace_count": 40,
+        "support_count": 12,
+        "replace_per_1k": 2.32,
+        "support_per_1k": 12.24,
+        "log_ratio": -1.63,
+        "total_count": 52
+      }
+    ]
+  },
+  "generated_at": "2026-07-18T02:19:50+00:00"
+}

@@ -1,0 +1,229 @@
+{
+  "top_25_categories": [
+    {
+      "rank": 1,
+      "category": "Materials Science, Multidisciplinary",
+      "papers": 7837,
+      "R": "60%",
+      "E": "38%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 2,
+      "category": "Chemistry, Multidisciplinary",
+      "papers": 7107,
+      "R": "64%",
+      "E": "34%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 3,
+      "category": "Nanoscience & Nanotechnology",
+      "papers": 5309,
+      "R": "62%",
+      "E": "36%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 4,
+      "category": "Materials Science, Biomaterials",
+      "papers": 5264,
+      "R": "47%",
+      "E": "50%",
+      "S": "4%",
+      "dom": "Enhance"
+    },
+    {
+      "rank": 5,
+      "category": "Chemistry, Physical",
+      "papers": 5076,
+      "R": "63%",
+      "E": "35%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 6,
+      "category": "Engineering, Biomedical",
+      "papers": 3540,
+      "R": "45%",
+      "E": "51%",
+      "S": "4%",
+      "dom": "Enhance"
+    },
+    {
+      "rank": 7,
+      "category": "Physics, Applied",
+      "papers": 3350,
+      "R": "63%",
+      "E": "35%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 8,
+      "category": "Polymer Science",
+      "papers": 2363,
+      "R": "54%",
+      "E": "44%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 9,
+      "category": "Physics, Condensed Matter",
+      "papers": 2067,
+      "R": "64%",
+      "E": "34%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 10,
+      "category": "Engineering, Chemical",
+      "papers": 1657,
+      "R": "53%",
+      "E": "46%",
+      "S": "1%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 11,
+      "category": "Biochemistry & Molecular Biology",
+      "papers": 1592,
+      "R": "54%",
+      "E": "44%",
+      "S": "3%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 12,
+      "category": "Multidisciplinary Sciences",
+      "papers": 1359,
+      "R": "60%",
+      "E": "34%",
+      "S": "6%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 13,
+      "category": "Chemistry, Organic",
+      "papers": 1076,
+      "R": "72%",
+      "E": "26%",
+      "S": "2%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 14,
+      "category": "Biotechnology & Applied Microbiology",
+      "papers": 1006,
+      "R": "45%",
+      "E": "51%",
+      "S": "4%",
+      "dom": "Enhance"
+    },
+    {
+      "rank": 15,
+      "category": "Engineering, Environmental",
+      "papers": 889,
+      "R": "56%",
+      "E": "43%",
+      "S": "1%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 16,
+      "category": "Chemistry, Analytical",
+      "papers": 885,
+      "R": "76%",
+      "E": "21%",
+      "S": "3%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 17,
+      "category": "Engineering, Multidisciplinary",
+      "papers": 812,
+      "R": "54%",
+      "E": "38%",
+      "S": "8%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 18,
+      "category": "Chemistry, Applied",
+      "papers": 806,
+      "R": "55%",
+      "E": "44%",
+      "S": "1%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 19,
+      "category": "Cell Biology",
+      "papers": 732,
+      "R": "45%",
+      "E": "49%",
+      "S": "7%",
+      "dom": "Enhance"
+    },
+    {
+      "rank": 20,
+      "category": "Cell & Tissue Engineering",
+      "papers": 658,
+      "R": "42%",
+      "E": "52%",
+      "S": "5%",
+      "dom": "Enhance"
+    },
+    {
+      "rank": 21,
+      "category": "Biophysics",
+      "papers": 648,
+      "R": "56%",
+      "E": "38%",
+      "S": "6%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 22,
+      "category": "Energy & Fuels",
+      "papers": 625,
+      "R": "47%",
+      "E": "51%",
+      "S": "2%",
+      "dom": "Enhance"
+    },
+    {
+      "rank": 23,
+      "category": "Robotics",
+      "papers": 593,
+      "R": "68%",
+      "E": "25%",
+      "S": "7%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 24,
+      "category": "Chemistry, Inorganic & Nuclear",
+      "papers": 587,
+      "R": "83%",
+      "E": "16%",
+      "S": "0%",
+      "dom": "Replace"
+    },
+    {
+      "rank": 25,
+      "category": "Pharmacology & Pharmacy",
+      "papers": 530,
+      "R": "64%",
+      "E": "33%",
+      "S": "3%",
+      "dom": "Replace"
+    }
+  ],
+}
