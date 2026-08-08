@@ -45,7 +45,7 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 #   FROM datasets ORDER BY import_date;
 #
 # The historical load should be a single row — take that dataset_id.
-LEGACY_DATASET_IDS = []  # TODO(Julian): fill in, e.g. [1]
+LEGACY_DATASET_IDS = [1]  # confirmed Aug 2026: matches all published figures exactly
 
 if not LEGACY_DATASET_IDS:
     raise ValueError(
