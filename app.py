@@ -1,5 +1,5 @@
 """
-MEco Research Dashboard — Complete Single-Page Application (LIGHT THEME · v3)
+MEco Research Dashboard — Complete Single-Page Application
 "Nature Is Not Optional."
 Based on Jacobs et al. (2025), Biomimetics 2025, 10, 784
 
