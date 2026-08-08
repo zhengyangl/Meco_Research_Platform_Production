@@ -1,0 +1,193 @@
+{
+  "services": [
+    {
+      "service": "Biochemicals",
+      "category": "Provisioning",
+      "total": 11079,
+      "replace": 5319,
+      "enhance": 5442,
+      "support": 318
+    },
+    {
+      "service": "Fibre/Hide/Wood",
+      "category": "Provisioning",
+      "total": 3506,
+      "replace": 1924,
+      "enhance": 1496,
+      "support": 86
+    },
+    {
+      "service": "Fuel",
+      "category": "Provisioning",
+      "total": 1675,
+      "replace": 959,
+      "enhance": 683,
+      "support": 33
+    },
+    {
+      "service": "Potable Water",
+      "category": "Provisioning",
+      "total": 784,
+      "replace": 306,
+      "enhance": 466,
+      "support": 12
+    },
+    {
+      "service": "Food",
+      "category": "Provisioning",
+      "total": 436,
+      "replace": 261,
+      "enhance": 149,
+      "support": 26
+    },
+    {
+      "service": "Biodiversity",
+      "category": "Provisioning",
+      "total": 121,
+      "replace": 65,
+      "enhance": 28,
+      "support": 28
+    },
+    {
+      "service": "Disease Regulation",
+      "category": "Regulating",
+      "total": 4413,
+      "replace": 3157,
+      "enhance": 1120,
+      "support": 136
+    },
+    {
+      "service": "Waste Treatment",
+      "category": "Regulating",
+      "total": 3968,
+      "replace": 2736,
+      "enhance": 1143,
+      "support": 89
+    },
+    {
+      "service": "Climate Regulation",
+      "category": "Regulating",
+      "total": 862,
+      "replace": 412,
+      "enhance": 409,
+      "support": 41
+    },
+    {
+      "service": "Atmospheric Regulation",
+      "category": "Regulating",
+      "total": 846,
+      "replace": 654,
+      "enhance": 177,
+      "support": 15
+    },
+    {
+      "service": "Water Regulation",
+      "category": "Regulating",
+      "total": 716,
+      "replace": 462,
+      "enhance": 215,
+      "support": 39
+    },
+    {
+      "service": "Pollination",
+      "category": "Regulating",
+      "total": 355,
+      "replace": 296,
+      "enhance": 45,
+      "support": 14
+    },
+    {
+      "service": "Coastline Regulation",
+      "category": "Regulating",
+      "total": 145,
+      "replace": 90,
+      "enhance": 45,
+      "support": 10
+    },
+    {
+      "service": "Primary Production",
+      "category": "Supporting",
+      "total": 718,
+      "replace": 486,
+      "enhance": 221,
+      "support": 11
+    },
+    {
+      "service": "Soil Formation",
+      "category": "Supporting",
+      "total": 383,
+      "replace": 106,
+      "enhance": 263,
+      "support": 14
+    },
+    {
+      "service": "Nutrient Cycling",
+      "category": "Supporting",
+      "total": 58,
+      "replace": 34,
+      "enhance": 17,
+      "support": 7
+    },
+    {
+      "service": "Inspiration/Education",
+      "category": "Cultural",
+      "total": 679,
+      "replace": 417,
+      "enhance": 172,
+      "support": 90
+    },
+    {
+      "service": "Aesthetic",
+      "category": "Cultural",
+      "total": 521,
+      "replace": 370,
+      "enhance": 120,
+      "support": 31
+    },
+    {
+      "service": "Recreation",
+      "category": "Cultural",
+      "total": 260,
+      "replace": 171,
+      "enhance": 71,
+      "support": 18
+    },
+    {
+      "service": "Cultural Heritage",
+      "category": "Cultural",
+      "total": 34,
+      "replace": 23,
+      "enhance": 8,
+      "support": 3
+    },
+    {
+      "service": "Spiritual",
+      "category": "Cultural",
+      "total": 0,
+      "replace": 0,
+      "enhance": 0,
+      "support": 0
+    },
+    {
+      "service": "Cultural Identity",
+      "category": "Cultural",
+      "total": 0,
+      "replace": 0,
+      "enhance": 0,
+      "support": 0
+    }
+  ],
+  "category_totals": {
+    "Provisioning": 17601,
+    "Regulating": 11305,
+    "Supporting": 1159,
+    "Cultural": 1494
+  },
+  "paradigm_totals": {
+    "replace": 18248,
+    "enhance": 12290,
+    "support": 1021
+  },
+  "grand_total": 31559,
+  "generated_at": "2026-07-07T05:03:32+00:00"
+}

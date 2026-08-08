@@ -1,0 +1,112 @@
+{
+  "words": [
+    {
+      "display": "photocatalytic",
+      "side": "Replace",
+      "replace_per_1k": 38.51,
+      "support_per_1k": 0.0,
+      "total_count": 664
+    },
+    {
+      "display": "antibacterial activity",
+      "side": "Replace",
+      "replace_per_1k": 20.24,
+      "support_per_1k": 0.0,
+      "total_count": 349
+    },
+    {
+      "display": "reactive oxygen species",
+      "side": "Replace",
+      "replace_per_1k": 19.46,
+      "support_per_1k": 0.0,
+      "total_count": 671
+    },
+    {
+      "display": "electron transfer",
+      "side": "Replace",
+      "replace_per_1k": 19.02,
+      "support_per_1k": 0.0,
+      "total_count": 328
+    },
+    {
+      "display": "molecularly imprinted",
+      "side": "Replace",
+      "replace_per_1k": 16.65,
+      "support_per_1k": 0.0,
+      "total_count": 287
+    },
+    {
+      "display": "carbon nanotubes",
+      "side": "Replace",
+      "replace_per_1k": 13.28,
+      "support_per_1k": 0.0,
+      "total_count": 229
+    },
+    {
+      "display": "water contact",
+      "side": "Replace",
+      "replace_per_1k": 25.23,
+      "support_per_1k": 0.0,
+      "total_count": 435
+    },
+    {
+      "display": "drag reduction",
+      "side": "Support",
+      "replace_per_1k": 4.52,
+      "support_per_1k": 58.16,
+      "total_count": 135
+    },
+    {
+      "display": "shark skin",
+      "side": "Support",
+      "replace_per_1k": 2.55,
+      "support_per_1k": 19.39,
+      "total_count": 63
+    },
+    {
+      "display": "aerodynamic",
+      "side": "Support",
+      "replace_per_1k": 4.99,
+      "support_per_1k": 61.22,
+      "total_count": 146
+    },
+    {
+      "display": "topography",
+      "side": "Support",
+      "replace_per_1k": 12.18,
+      "support_per_1k": 73.47,
+      "total_count": 282
+    },
+    {
+      "display": "fluid dynamics",
+      "side": "Support",
+      "replace_per_1k": 3.65,
+      "support_per_1k": 19.39,
+      "total_count": 82
+    },
+    {
+      "display": "underwater vehicles",
+      "side": "Support",
+      "replace_per_1k": 2.32,
+      "support_per_1k": 12.24,
+      "total_count": 52
+    },
+    {
+      "display": "sustainability",
+      "side": "Support",
+      "replace_per_1k": 5.05,
+      "support_per_1k": 36.73,
+      "total_count": 123
+    },
+    {
+      "display": "ecological",
+      "side": "Support",
+      "replace_per_1k": 4.18,
+      "support_per_1k": 29.59,
+      "total_count": 101
+    }
+  ],
+  "n_replace_abstracts": 17242,
+  "n_support_abstracts": 980,
+  "generated_at": "2026-07-18T08:44:04+00:00"
+}

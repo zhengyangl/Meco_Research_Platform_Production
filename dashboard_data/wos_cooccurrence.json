@@ -1,0 +1,529 @@
+{
+  "top_n_baked": 25,
+  "edge_threshold": 200,
+  "nodes": [
+    {
+      "raw_name": "Materials Science, Multidisciplinary",
+      "display": "Materials Sci.",
+      "cluster": "Hard-Sci",
+      "n_papers": 7837,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.604,
+      "enhance_pct": 0.377,
+      "support_pct": 0.019
+    },
+    {
+      "raw_name": "Chemistry, Multidisciplinary",
+      "display": "Chemistry",
+      "cluster": "Hard-Sci",
+      "n_papers": 7107,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.644,
+      "enhance_pct": 0.336,
+      "support_pct": 0.019
+    },
+    {
+      "raw_name": "Nanoscience & Nanotechnology",
+      "display": "Nanoscience",
+      "cluster": "Hard-Sci",
+      "n_papers": 5309,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.62,
+      "enhance_pct": 0.364,
+      "support_pct": 0.016
+    },
+    {
+      "raw_name": "Materials Science, Biomaterials",
+      "display": "Biomaterials",
+      "cluster": "Bio-Applied",
+      "n_papers": 5264,
+      "dominant_paradigm": "Enhance",
+      "replace_pct": 0.47,
+      "enhance_pct": 0.495,
+      "support_pct": 0.036
+    },
+    {
+      "raw_name": "Chemistry, Physical",
+      "display": "Physical Chem.",
+      "cluster": "Hard-Sci",
+      "n_papers": 5076,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.626,
+      "enhance_pct": 0.354,
+      "support_pct": 0.019
+    },
+    {
+      "raw_name": "Engineering, Biomedical",
+      "display": "Biomedical Eng.",
+      "cluster": "Bio-Applied",
+      "n_papers": 3540,
+      "dominant_paradigm": "Enhance",
+      "replace_pct": 0.453,
+      "enhance_pct": 0.51,
+      "support_pct": 0.038
+    },
+    {
+      "raw_name": "Physics, Applied",
+      "display": "Physics (Applied)",
+      "cluster": "Hard-Sci",
+      "n_papers": 3350,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.626,
+      "enhance_pct": 0.353,
+      "support_pct": 0.021
+    },
+    {
+      "raw_name": "Polymer Science",
+      "display": "Polymer Sci.",
+      "cluster": "Hard-Sci",
+      "n_papers": 2363,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.544,
+      "enhance_pct": 0.44,
+      "support_pct": 0.016
+    },
+    {
+      "raw_name": "Physics, Condensed Matter",
+      "display": "Physics (Cond. Matter)",
+      "cluster": "Hard-Sci",
+      "n_papers": 2067,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.641,
+      "enhance_pct": 0.342,
+      "support_pct": 0.017
+    },
+    {
+      "raw_name": "Engineering, Chemical",
+      "display": "Chem. Eng.",
+      "cluster": "Applied-Eng",
+      "n_papers": 1657,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.527,
+      "enhance_pct": 0.463,
+      "support_pct": 0.01
+    },
+    {
+      "raw_name": "Biochemistry & Molecular Biology",
+      "display": "Biochemistry",
+      "cluster": "Bio-Applied",
+      "n_papers": 1592,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.535,
+      "enhance_pct": 0.435,
+      "support_pct": 0.03
+    },
+    {
+      "raw_name": "Multidisciplinary Sciences",
+      "display": "Multi-Sci.",
+      "cluster": "Applied-Eng",
+      "n_papers": 1359,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.604,
+      "enhance_pct": 0.34,
+      "support_pct": 0.056
+    },
+    {
+      "raw_name": "Chemistry, Organic",
+      "display": "Organic Chem.",
+      "cluster": "Hard-Sci",
+      "n_papers": 1076,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.719,
+      "enhance_pct": 0.256,
+      "support_pct": 0.025
+    },
+    {
+      "raw_name": "Biotechnology & Applied Microbiology",
+      "display": "Biotech",
+      "cluster": "Bio-Applied",
+      "n_papers": 1006,
+      "dominant_paradigm": "Enhance",
+      "replace_pct": 0.447,
+      "enhance_pct": 0.512,
+      "support_pct": 0.041
+    },
+    {
+      "raw_name": "Engineering, Environmental",
+      "display": "Env. Eng.",
+      "cluster": "Applied-Eng",
+      "n_papers": 889,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.558,
+      "enhance_pct": 0.431,
+      "support_pct": 0.011
+    },
+    {
+      "raw_name": "Chemistry, Analytical",
+      "display": "Analytical Chem.",
+      "cluster": "Hard-Sci",
+      "n_papers": 885,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.757,
+      "enhance_pct": 0.209,
+      "support_pct": 0.034
+    },
+    {
+      "raw_name": "Engineering, Multidisciplinary",
+      "display": "Eng. (Multi.)",
+      "cluster": "Applied-Eng",
+      "n_papers": 812,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.536,
+      "enhance_pct": 0.384,
+      "support_pct": 0.08
+    },
+    {
+      "raw_name": "Chemistry, Applied",
+      "display": "Applied Chem.",
+      "cluster": "Hard-Sci",
+      "n_papers": 806,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.551,
+      "enhance_pct": 0.442,
+      "support_pct": 0.007
+    },
+    {
+      "raw_name": "Cell Biology",
+      "display": "Cell Biology",
+      "cluster": "Bio-Applied",
+      "n_papers": 732,
+      "dominant_paradigm": "Enhance",
+      "replace_pct": 0.447,
+      "enhance_pct": 0.488,
+      "support_pct": 0.066
+    },
+    {
+      "raw_name": "Cell & Tissue Engineering",
+      "display": "Cell/Tissue Eng.",
+      "cluster": "Bio-Applied",
+      "n_papers": 658,
+      "dominant_paradigm": "Enhance",
+      "replace_pct": 0.424,
+      "enhance_pct": 0.524,
+      "support_pct": 0.052
+    },
+    {
+      "raw_name": "Biophysics",
+      "display": "Biophysics",
+      "cluster": "Bio-Applied",
+      "n_papers": 648,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.559,
+      "enhance_pct": 0.384,
+      "support_pct": 0.057
+    },
+    {
+      "raw_name": "Energy & Fuels",
+      "display": "Energy",
+      "cluster": "Applied-Eng",
+      "n_papers": 625,
+      "dominant_paradigm": "Enhance",
+      "replace_pct": 0.474,
+      "enhance_pct": 0.509,
+      "support_pct": 0.018
+    },
+    {
+      "raw_name": "Robotics",
+      "display": "Robotics",
+      "cluster": "Applied-Eng",
+      "n_papers": 593,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.681,
+      "enhance_pct": 0.253,
+      "support_pct": 0.066
+    },
+    {
+      "raw_name": "Chemistry, Inorganic & Nuclear",
+      "display": "Inorganic Chem.",
+      "cluster": "Hard-Sci",
+      "n_papers": 587,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.833,
+      "enhance_pct": 0.164,
+      "support_pct": 0.003
+    },
+    {
+      "raw_name": "Pharmacology & Pharmacy",
+      "display": "Pharmacology",
+      "cluster": "Bio-Applied",
+      "n_papers": 530,
+      "dominant_paradigm": "Replace",
+      "replace_pct": 0.643,
+      "enhance_pct": 0.328,
+      "support_pct": 0.028
+    }
+  ],
+  "edges": [
+    {
+      "a": "Materials Science, Multidisciplinary",
+      "b": "Nanoscience & Nanotechnology",
+      "cooccur": 4246,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Physical",
+      "b": "Materials Science, Multidisciplinary",
+      "cooccur": 3427,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Multidisciplinary",
+      "b": "Materials Science, Multidisciplinary",
+      "cooccur": 3252,
+      "cross": false
+    },
+    {
+      "a": "Engineering, Biomedical",
+      "b": "Materials Science, Biomaterials",
+      "cooccur": 2950,
+      "cross": false
+    },
+    {
+      "a": "Materials Science, Multidisciplinary",
+      "b": "Physics, Applied",
+      "cooccur": 2780,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Multidisciplinary",
+      "b": "Nanoscience & Nanotechnology",
+      "cooccur": 2594,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Multidisciplinary",
+      "b": "Chemistry, Physical",
+      "cooccur": 2254,
+      "cross": false
+    },
+    {
+      "a": "Nanoscience & Nanotechnology",
+      "b": "Physics, Applied",
+      "cooccur": 2205,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Physical",
+      "b": "Nanoscience & Nanotechnology",
+      "cooccur": 2198,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Physical",
+      "b": "Physics, Applied",
+      "cooccur": 2035,
+      "cross": false
+    },
+    {
+      "a": "Physics, Applied",
+      "b": "Physics, Condensed Matter",
+      "cooccur": 2006,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Physical",
+      "b": "Physics, Condensed Matter",
+      "cooccur": 1902,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Multidisciplinary",
+      "b": "Physics, Applied",
+      "cooccur": 1816,
+      "cross": false
+    },
+    {
+      "a": "Materials Science, Multidisciplinary",
+      "b": "Physics, Condensed Matter",
+      "cooccur": 1773,
+      "cross": false
+    },
+    {
+      "a": "Nanoscience & Nanotechnology",
+      "b": "Physics, Condensed Matter",
+      "cooccur": 1517,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Multidisciplinary",
+      "b": "Physics, Condensed Matter",
+      "cooccur": 1509,
+      "cross": false
+    },
+    {
+      "a": "Biochemistry & Molecular Biology",
+      "b": "Polymer Science",
+      "cooccur": 718,
+      "cross": true
+    },
+    {
+      "a": "Engineering, Chemical",
+      "b": "Engineering, Environmental",
+      "cooccur": 680,
+      "cross": false
+    },
+    {
+      "a": "Engineering, Multidisciplinary",
+      "b": "Materials Science, Biomaterials",
+      "cooccur": 568,
+      "cross": true
+    },
+    {
+      "a": "Cell & Tissue Engineering",
+      "b": "Engineering, Biomedical",
+      "cooccur": 516,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Applied",
+      "b": "Polymer Science",
+      "cooccur": 507,
+      "cross": false
+    },
+    {
+      "a": "Cell & Tissue Engineering",
+      "b": "Cell Biology",
+      "cooccur": 496,
+      "cross": false
+    },
+    {
+      "a": "Cell Biology",
+      "b": "Engineering, Biomedical",
+      "cooccur": 456,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Organic",
+      "b": "Polymer Science",
+      "cooccur": 401,
+      "cross": false
+    },
+    {
+      "a": "Materials Science, Biomaterials",
+      "b": "Nanoscience & Nanotechnology",
+      "cooccur": 400,
+      "cross": true
+    },
+    {
+      "a": "Engineering, Multidisciplinary",
+      "b": "Robotics",
+      "cooccur": 369,
+      "cross": false
+    },
+    {
+      "a": "Materials Science, Biomaterials",
+      "b": "Robotics",
+      "cooccur": 369,
+      "cross": true
+    },
+    {
+      "a": "Cell & Tissue Engineering",
+      "b": "Materials Science, Biomaterials",
+      "cooccur": 361,
+      "cross": false
+    },
+    {
+      "a": "Cell Biology",
+      "b": "Materials Science, Biomaterials",
+      "cooccur": 344,
+      "cross": false
+    },
+    {
+      "a": "Biochemistry & Molecular Biology",
+      "b": "Chemistry, Applied",
+      "cooccur": 331,
+      "cross": true
+    },
+    {
+      "a": "Biotechnology & Applied Microbiology",
+      "b": "Engineering, Biomedical",
+      "cooccur": 314,
+      "cross": false
+    },
+    {
+      "a": "Biochemistry & Molecular Biology",
+      "b": "Chemistry, Organic",
+      "cooccur": 297,
+      "cross": true
+    },
+    {
+      "a": "Energy & Fuels",
+      "b": "Materials Science, Multidisciplinary",
+      "cooccur": 291,
+      "cross": true
+    },
+    {
+      "a": "Chemistry, Analytical",
+      "b": "Nanoscience & Nanotechnology",
+      "cooccur": 284,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Physical",
+      "b": "Energy & Fuels",
+      "cooccur": 277,
+      "cross": true
+    },
+    {
+      "a": "Materials Science, Multidisciplinary",
+      "b": "Polymer Science",
+      "cooccur": 273,
+      "cross": false
+    },
+    {
+      "a": "Engineering, Biomedical",
+      "b": "Nanoscience & Nanotechnology",
+      "cooccur": 272,
+      "cross": true
+    },
+    {
+      "a": "Biochemistry & Molecular Biology",
+      "b": "Chemistry, Multidisciplinary",
+      "cooccur": 252,
+      "cross": true
+    },
+    {
+      "a": "Biophysics",
+      "b": "Materials Science, Biomaterials",
+      "cooccur": 249,
+      "cross": false
+    },
+    {
+      "a": "Chemistry, Multidisciplinary",
+      "b": "Engineering, Chemical",
+      "cooccur": 242,
+      "cross": true
+    },
+    {
+      "a": "Materials Science, Biomaterials",
+      "b": "Polymer Science",
+      "cooccur": 238,
+      "cross": true
+    },
+    {
+      "a": "Biophysics",
+      "b": "Chemistry, Physical",
+      "cooccur": 225,
+      "cross": true
+    },
+    {
+      "a": "Chemistry, Physical",
+      "b": "Materials Science, Biomaterials",
+      "cooccur": 214,
+      "cross": true
+    },
+    {
+      "a": "Biotechnology & Applied Microbiology",
+      "b": "Nanoscience & Nanotechnology",
+      "cooccur": 202,
+      "cross": true
+    }
+  ],
+  "eco_absence": {
+    "env_eng_papers": 889,
+    "env_eng_rank": 15,
+    "corpus_total": 31559,
+    "pure_ecology_present": false
+  },
+  "generated_at": "2026-07-17T20:54:38+00:00"
+}

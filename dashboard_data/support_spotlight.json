@@ -1,0 +1,53 @@
+{
+  "spotlights": [
+    {
+      "service": "Coastline Regulation",
+      "n_papers": 10,
+      "top_paper": {
+        "wos_id": "WOS:000428576200006",
+        "title": "Combat biofouling with microscopic ridge-like surface morphology: a bioinspired study",
+        "doi": "10.1098/rsif.2017.0823",
+        "pub_year": 2018,
+        "times_cited": 45,
+        "first_author": "Fu, Jimin"
+      }
+    },
+    {
+      "service": "Primary Production",
+      "n_papers": 11,
+      "top_paper": {
+        "wos_id": "WOS:000282134700020",
+        "title": "Nucleation geometry governs ordered actin networks structures",
+        "doi": "10.1038/nmat2855",
+        "pub_year": 2010,
+        "times_cited": 104,
+        "first_author": "Reymann, Anne-Cecile"
+      }
+    },
+    {
+      "service": "Pollination",
+      "n_papers": 14,
+      "top_paper": {
+        "wos_id": "WOS:000266891900030",
+        "title": "Conical Epidermal Cells Allow Bees to Grip Flowers and Increase Foraging Efficiency",
+        "doi": "10.1016/j.cub.2009.04.051",
+        "pub_year": 2009,
+        "times_cited": 135,
+        "first_author": "Whitney, Heather M."
+      }
+    },
+    {
+      "service": "Water Regulation",
+      "n_papers": 39,
+      "top_paper": {
+        "wos_id": "WOS:000268719900056",
+        "title": "Dynamic Effects Induced Transition of Droplets on Biomimetic Superhydrophobic Surfaces",
+        "doi": "10.1021/la900761u",
+        "pub_year": 2009,
+        "times_cited": 148,
+        "first_author": "Jung, Yong Chae"
+      }
+    }
+  ],
+  "generated_at": "2026-07-15T06:19:26+00:00"
+}
