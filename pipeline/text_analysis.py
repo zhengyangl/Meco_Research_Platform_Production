@@ -593,36 +593,173 @@ def standardize_institutions(conn) -> dict:
 # Technology Clustering
 # ════════════════════════════════════════════════════════════════
 
+_EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+# Cosine similarity below this is still assigned (Option A = no human step
+# for routine runs) but logged distinctly, so a maintainer scanning output
+# can tell "confidently matched" apart from "forced into the closest thing
+# available." Not a hard gate — purely for visibility.
+_LOW_CONFIDENCE_SIMILARITY = 0.35
+
+
+def _get_embedder():
+    """
+    Lazy import — sentence-transformers (and its torch dependency) is only
+    needed for this one task, not the other four, so it isn't imported at
+    module load time.
+    """
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError as e:
+        raise ImportError(
+            "sentence-transformers is required for cluster_technologies(). "
+            "pip install sentence-transformers --break-system-packages "
+            "(see requirements_pipeline.txt)."
+        ) from e
+    return SentenceTransformer(_EMBEDDING_MODEL_NAME)
+
+
+def _cosine_sim_matrix(a, b):
+    import numpy as np
+    a_norm = a / np.linalg.norm(a, axis=1, keepdims=True)
+    b_norm = b / np.linalg.norm(b, axis=1, keepdims=True)
+    return a_norm @ b_norm.T
+
+
 def cluster_technologies(conn) -> dict:
     """
-    STATUS: not yet implemented — this is the one TASK_MAP entry still a
-    stub after the Aug 2026 repo cleanup.
+    Nearest-centroid assignment (confirmed design, Aug 2026 — Option A).
 
-    The 25 canonical technology_cluster categories currently in the
-    database were produced by a one-off, manual process (BERTopic on
-    normalized technology phrases, then a human-curated canonical_name
-    assigned per cluster) run locally, not by this function. That process
-    doesn't belong in a production pipeline script — it required a person
-    reviewing cluster contents and naming them by hand — so it isn't
-    reproduced here. It has been removed from this file as leftover
-    exploratory code; the methodology should be written up in
-    docs/data_dictionary.md when that doc is produced (task 3), not kept
-    as runnable code that no incremental run should actually execute.
+    The 25 canonical technology_cluster categories are NOT re-derived here.
+    They already exist in paper_features from a one-off, manual process
+    (BERTopic + human-assigned canonical_name, run once, locally — see
+    docs/data_dictionary.md for that history). That process doesn't belong
+    in a production pipeline script, so it isn't reproduced.
 
-    CONFIRMED DESIGN (Aug 2026) for how NEW papers get a technology_cluster
-    going forward — Option A, nearest-centroid assignment:
-      1. Embed the new paper's `technology` phrase (classifications.technology).
-      2. Compare against the 25 existing canonical cluster centroids.
-      3. Assign to the nearest centroid — no human step for routine runs.
-    This requires the 25 clusters' centroid embeddings to be computed once
-    and stored somewhere reusable (not yet done — the original clustering
-    run didn't persist centroids, only the final canonical_name mapping).
-    Implementing this is planned alongside task 5 (run_pipeline.py), not
-    as part of this cleanup pass.
+    What this function actually does, every run:
+      1. Recomputes the 25 clusters' centroid embeddings FRESH from
+         whichever papers are CURRENTLY labeled with each cluster. The
+         original centroids were never persisted (only the final
+         canonical_name mapping survived), so there's nothing to load —
+         recomputing from current ground truth is cheap at this corpus
+         size and always reflects the latest labeled set.
+      2. Assigns ONLY papers that don't yet have a current
+         technology_cluster feature (i.e. genuinely new papers) to their
+         nearest centroid by cosine similarity.
+
+    Deliberately NOT a full retire-and-recompute like the other four
+    TASK_MAP functions: nearest-centroid assignment is probabilistic, and
+    reapplying it over the original 25-cluster ground truth could silently
+    drift some of those papers away from their human-curated label.
+    Existing assignments are left untouched; only new papers are assigned.
+
+    Known limitation: if a paper's `technology` value changes after it
+    already has a current technology_cluster row (e.g. reclassification
+    after a model upgrade, or a human review correction), this function
+    will NOT re-assign it — the NOT EXISTS check below only catches papers
+    with no current row at all. Reclassification handling is out of scope
+    here; flagging for whoever picks up reclassification support later.
     """
-    print("\n[T5d] cluster_technologies() — not yet implemented (see docstring: "
-          "nearest-centroid design confirmed, implementation pending task 5)")
-    return {}
+    print("\n" + "═" * 60)
+    print("T5d · Technology Clustering (nearest-centroid)")
+    print("═" * 60)
+    t0 = time.time()
+    cur = conn.cursor()
+
+    # ── Step 1: recompute centroids from current ground truth ──────
+    cur.execute(
+        """
+        SELECT c.technology, pf.feature_val
+        FROM classifications c
+        JOIN paper_features pf ON c.wos_id = pf.wos_id
+        WHERE c.is_current = TRUE
+          AND pf.feature_set = %s AND pf.feature_key = 'technology_cluster'
+          AND pf.is_current = TRUE
+          AND c.technology IS NOT NULL AND c.technology <> ''
+        """,
+        (FEATURE_SET,),
+    )
+    ground_truth = cur.fetchall()
+    if not ground_truth:
+        print("  No existing technology_cluster ground truth found in paper_features — "
+              "cannot compute centroids. (Has the original 25-cluster labeling been "
+              "loaded into the database?)")
+        cur.close()
+        return {"assigned": 0, "clusters": 0}
+
+    import numpy as np
+    from collections import defaultdict
+
+    embedder = _get_embedder()
+    texts = [row[0] for row in ground_truth]
+    labels = [row[1] for row in ground_truth]
+    ground_truth_embeddings = embedder.encode(texts, show_progress_bar=False)
+
+    vectors_by_cluster = defaultdict(list)
+    for vec, cluster_name in zip(ground_truth_embeddings, labels):
+        vectors_by_cluster[cluster_name].append(vec)
+    centroid_names = sorted(vectors_by_cluster.keys())
+    centroids = np.array([np.mean(vectors_by_cluster[c], axis=0) for c in centroid_names])
+    print(f"  Recomputed {len(centroid_names)} cluster centroid(s) from "
+          f"{len(texts):,} currently-labeled paper(s)")
+
+    # ── Step 2: find papers needing assignment ──────────────────────
+    cur.execute(
+        """
+        SELECT c.wos_id, c.technology
+        FROM classifications c
+        WHERE c.is_current = TRUE
+          AND c.decision = 'Y'
+          AND c.technology IS NOT NULL AND c.technology <> ''
+          AND NOT EXISTS (
+              SELECT 1 FROM paper_features pf
+              WHERE pf.wos_id = c.wos_id AND pf.feature_set = %s
+                AND pf.feature_key = 'technology_cluster' AND pf.is_current = TRUE
+          )
+        """,
+        (FEATURE_SET,),
+    )
+    new_papers = cur.fetchall()
+    print(f"  Papers needing technology_cluster assignment: {len(new_papers):,}")
+
+    if not new_papers:
+        print("  Nothing new to assign.")
+        cur.close()
+        return {"assigned": 0, "clusters": len(centroid_names)}
+
+    new_wos_ids = [r[0] for r in new_papers]
+    new_texts = [r[1] for r in new_papers]
+    new_embeddings = np.array(embedder.encode(new_texts, show_progress_bar=False))
+
+    sims = _cosine_sim_matrix(new_embeddings, centroids)
+    best_idx = sims.argmax(axis=1)
+    best_sim = sims.max(axis=1)
+
+    feature_rows = []
+    n_low_confidence = 0
+    for wos_id, idx, sim in zip(new_wos_ids, best_idx, best_sim):
+        cluster_name = centroid_names[int(idx)]
+        feature_rows.append((wos_id, FEATURE_SET, "technology_cluster", cluster_name, True))
+        if sim < _LOW_CONFIDENCE_SIMILARITY:
+            n_low_confidence += 1
+
+    # No _retire_features call here — see docstring. These are strictly
+    # NEW rows for papers that had none, not replacements for existing ones.
+    _insert_features(cur, feature_rows)
+    conn.commit()
+
+    elapsed = time.time() - t0
+    print(f"\n  ✓ Assigned {len(feature_rows):,} paper(s) to nearest cluster in {elapsed:.1f}s")
+    if n_low_confidence:
+        print(f"  ⚠ {n_low_confidence:,} assignment(s) below similarity threshold "
+              f"{_LOW_CONFIDENCE_SIMILARITY} — still assigned per the confirmed "
+              f"no-human-step design, flagged here for visibility only.")
+
+    cur.close()
+    return {
+        "assigned": len(feature_rows),
+        "clusters": len(centroid_names),
+        "low_confidence": n_low_confidence,
+    }
 
 
 # ════════════════════════════════════════════════════════════════
