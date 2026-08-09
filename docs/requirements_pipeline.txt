@@ -1,0 +1,21 @@
+# Pipeline requirements — pipelines/{ingest_initial,ingest_incremental,
+# classify,text_analysis,aggregate,run_pipeline}.py
+
+pandas>=2.2
+numpy>=1.26
+openpyxl>=3.1          
+psycopg2-binary>=2.9
+
+# classify.py — OpenRouter for Qwen-2.5-72B
+openai>=1.30
+tqdm>=4.66
+
+# classify.py — pre-ingestion human review queue (Google Sheets)
+gspread>=6.0
+google-auth>=2.30
+
+# run_pipeline.py — Google Drive detection of new WoS uploads
+google-api-python-client>=2.130
+
+# text_analysis.py — cluster_technologies() nearest-centroid embeddings
+sentence-transformers>=3.0
