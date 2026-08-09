@@ -136,14 +136,160 @@ div[data-testid="stRadio"] label {
 """, unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════
-# DATA LOADING & PRE-CACHING 
+# DATA LOADING & PRE-CACHING
 # ════════════════════════════════════════════════════════════════
-_DATA_DIR = Path(__file__).parent.parent / "dashboard_data"
+# Confirmed design (Aug 2026): Explorer reads DIRECTLY from PostgreSQL —
+# unlike the narrative page (app.py), which only ever reads pre-computed
+# static files under dashboard_data/. Explorer must show ALL current data
+# (legacy + everything ingest_incremental.py has added since), so its query
+# is intentionally NOT filtered by dataset_id — see aggregate.py's
+# LEGACY_DATASET_IDS design note for the narrative-side half of this split.
+#
+# Filtering logic itself (cascading multiselects, search, AgGrid, URL sync)
+# is UNCHANGED — it still all runs in-memory over a single DataFrame. At the
+# corpus's current scale (~30k rows, growing in small increments) querying
+# the whole table once per cache period is simpler and safer than rewriting
+# every filter as dynamic SQL.
+import os
+import psycopg2
 
-@st.cache_data
+_DATA_DIR = Path(__file__).parent.parent / "dashboard_data"
+_CACHE_TTL_SECONDS = 900  # 15 minutes — new incremental data appears without an app restart
+
+# The 22-service whitelist. Defined once here (not derived from the data)
+# because two services — Spiritual and Cultural Identity — currently have
+# zero papers and would silently disappear from any df.unique()-based list.
+# Also used to filter the DB query below, same whitelist aggregate.py uses.
+_ALL_SERVICES = [
+    "Biochemicals", "Fibre/Hide/Wood", "Fuel", "Potable Water",
+    "Food", "Biodiversity", "Disease Regulation", "Waste Treatment",
+    "Climate Regulation", "Atmospheric Regulation", "Water Regulation",
+    "Pollination", "Coastline Regulation", "Primary Production",
+    "Soil Formation", "Nutrient Cycling", "Inspiration/Education",
+    "Aesthetic", "Recreation", "Cultural Heritage", "Spiritual",
+    "Cultural Identity",
+]
+
+_EXPLORER_PAPERS_SQL = """
+SELECT
+    p.wos_id, p.doi, p.title, p.pub_year, p.source_title, p.times_cited,
+    p.open_access, p.authors, p.affiliations, p.wos_categories, p.keywords,
+    p.addresses, p.funding_orgs,
+    c.category, c.ecosystem_service, c.technology, c.model_version,
+    COALESCE(
+        (SELECT STRING_AGG(pf.feature_val, ' | ' ORDER BY pf.feature_val)
+         FROM paper_features pf
+         WHERE pf.wos_id = p.wos_id AND pf.feature_set = 'nlp_v1'
+           AND pf.feature_key = 'wos_category' AND pf.is_current = TRUE),
+        p.wos_categories
+    ) AS wos_categories_parsed,
+    (SELECT pf.feature_val FROM paper_features pf
+     WHERE pf.wos_id = p.wos_id AND pf.feature_set = 'nlp_v1'
+       AND pf.feature_key = 'country_first' AND pf.is_current = TRUE LIMIT 1) AS country_first,
+    (SELECT STRING_AGG(pf.feature_val, ' | ' ORDER BY pf.feature_val) FROM paper_features pf
+     WHERE pf.wos_id = p.wos_id AND pf.feature_set = 'nlp_v1'
+       AND pf.feature_key = 'country' AND pf.is_current = TRUE) AS countries_all,
+    (SELECT pf.feature_val FROM paper_features pf
+     WHERE pf.wos_id = p.wos_id AND pf.feature_set = 'nlp_v1'
+       AND pf.feature_key = 'institution_top' AND pf.is_current = TRUE LIMIT 1) AS institution_top,
+    (SELECT STRING_AGG(pf.feature_val, ' | ' ORDER BY pf.feature_val) FROM paper_features pf
+     WHERE pf.wos_id = p.wos_id AND pf.feature_set = 'nlp_v1'
+       AND pf.feature_key = 'institution_all' AND pf.is_current = TRUE) AS institutions_all,
+    (SELECT pf.feature_val FROM paper_features pf
+     WHERE pf.wos_id = p.wos_id AND pf.feature_set = 'nlp_v1'
+       AND pf.feature_key = 'technology_cluster' AND pf.is_current = TRUE LIMIT 1) AS technology_cluster,
+    (SELECT STRING_AGG(pf.feature_val, ' | ' ORDER BY pf.feature_val) FROM paper_features pf
+     WHERE pf.wos_id = p.wos_id AND pf.feature_set = 'nlp_v1'
+       AND pf.feature_key = 'funding_top' AND pf.is_current = TRUE) AS funding_agencies
+FROM papers p
+JOIN classifications c ON p.wos_id = c.wos_id
+WHERE p.is_review = FALSE
+  AND c.is_current = TRUE
+  AND c.decision = 'Y'
+  AND c.ecosystem_service = ANY(%s)
+"""
+
+
+def _get_db_uri():
+    return os.environ.get("DATABASE_URL")
+
+
+def _query_papers_and_live_meta_from_db():
+    """
+    Single connection, two queries:
+      1. The papers query (unchanged) — feeds df_all.
+      2. A live meta-stats query, unfiltered by dataset_id — total_papers /
+         non_review / reviews across ALL current data. decision_y is just
+         len(df) since the papers query already applies exactly that filter
+         (is_review=FALSE, decision='Y', whitelist), so no extra query needed.
+
+    This intentionally does NOT touch corpus_meta.json's generation logic in
+    aggregate.py — that file stays legacy-locked (LEGACY_DATASET_IDS) for the
+    narrative page. Explorer needs different numbers (live, not locked), so
+    it computes its own here rather than overloading one file for two
+    incompatible purposes.
+    """
+    uri = _get_db_uri()
+    if not uri:
+        raise EnvironmentError("DATABASE_URL is not set")
+    conn = psycopg2.connect(uri)
+    try:
+        df = pd.read_sql(_EXPLORER_PAPERS_SQL, conn, params=(_ALL_SERVICES,))
+        _counts = pd.read_sql(
+            "SELECT COUNT(*) AS total_papers, "
+            "COUNT(*) FILTER (WHERE is_review = FALSE) AS non_review, "
+            "COUNT(*) FILTER (WHERE is_review = TRUE) AS reviews "
+            "FROM papers",
+            conn,
+        ).iloc[0]
+        live_meta = {
+            "total_papers": int(_counts["total_papers"]),
+            "non_review":   int(_counts["non_review"]),
+            "reviews":      int(_counts["reviews"]),
+            "decision_y":   len(df),
+        }
+        return df, live_meta
+    finally:
+        conn.close()
+
+
+def _query_abstracts_from_db() -> dict:
+    uri = _get_db_uri()
+    if not uri:
+        raise EnvironmentError("DATABASE_URL is not set")
+    conn = psycopg2.connect(uri)
+    try:
+        _abs_df = pd.read_sql(
+            "SELECT wos_id, abstract FROM papers WHERE abstract IS NOT NULL", conn
+        )
+        return dict(zip(_abs_df["wos_id"], _abs_df["abstract"]))
+    finally:
+        conn.close()
+
+
+@st.cache_data(ttl=_CACHE_TTL_SECONDS)
 def load_data() -> tuple:
-    # 1. Load DataFrame
-    df = pd.read_parquet(_DATA_DIR / "papers_classified.parquet")
+    # 1. Load DataFrame (+ live meta counts) — DB first, local parquet as
+    # fallback if the DB is unreachable (network hiccup, credentials not yet
+    # configured, etc). On fallback, live_meta is unavailable — the static
+    # (legacy) meta numbers are used instead, which is fine since the
+    # fallback banner already tells the user data may be stale.
+    data_source = "db"
+    live_meta = None
+    try:
+        df, live_meta = _query_papers_and_live_meta_from_db()
+    except Exception as e:
+        data_source = "fallback_parquet"
+        try:
+            df = pd.read_parquet(_DATA_DIR / "papers_classified.parquet")
+        except FileNotFoundError:
+            st.error(
+                f"Could not reach the database ({e}) and no local fallback "
+                f"file was found at {_DATA_DIR / 'papers_classified.parquet'}. "
+                f"The Explorer has no data to show."
+            )
+            st.stop()
+
     df["pub_year"]    = pd.to_numeric(df["pub_year"], errors="coerce").astype("Int64")
     df["times_cited"] = pd.to_numeric(df["times_cited"], errors="coerce").fillna(0).astype(int)
     df["open_access"] = df["open_access"].fillna("Closed")
@@ -175,7 +321,7 @@ def load_data() -> tuple:
     options = {
         "years":        sorted(df["pub_year"].dropna().unique().tolist()),
         "categories":   ["Replace", "Enhance", "Support"],
-        "families":     sorted(df["service_category"].dropna().unique().tolist()),
+        "families":     sorted(df["service_category"].dropna().unique().tolist()) if "service_category" in df.columns else [],
         "services":     sorted(df["ecosystem_service"].dropna().unique().tolist()),
         "oa":           sorted(df["open_access"].dropna().unique().tolist()),
         "journals":     major_journals + ["Other Journals"],
@@ -184,9 +330,20 @@ def load_data() -> tuple:
         "top_institutions": _top_institutions,
         "funding_list": _funding_list,
     }
-    # 3. Load Meta
-    with open(_DATA_DIR / "corpus_meta.json", encoding="utf-8") as f:
-        meta = json.load(f)
+    # 3. Load Meta — starts from the static (legacy-locked) file for
+    # provenance fields like dataset_version, then LIVE counts overwrite
+    # total_papers/non_review/reviews/decision_y when the DB is reachable,
+    # so the methodology panel reflects the current Explorer contents rather
+    # than staying frozen at the original published numbers.
+    try:
+        with open(_DATA_DIR / "corpus_meta.json", encoding="utf-8") as f:
+            meta = json.load(f)
+    except FileNotFoundError:
+        meta = {}
+    if live_meta is not None:
+        meta.update(live_meta)
+    meta["_data_source"] = data_source
+    meta["_loaded_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     
     # 4. Pre-compute Impact Tier thresholds — relative to the FULL corpus.
     # These never change as the user filters, so "Top 1%" always means
@@ -201,7 +358,28 @@ def load_data() -> tuple:
         # Anything strictly below the median (i.e. bottom half) we treat as "tail".
         # The exact 0.50 quantile becomes the boundary between Median and Tail.
     }
-        
+
+    # service_category isn't returned by the DB query (it's derived, not
+    # stored) — compute it the same way aggregate.py does, from the same
+    # whitelist mapping, so filtering behaves identically either data source.
+    if "service_category" not in df.columns:
+        _SERVICE_TO_FAMILY = {
+            "Biochemicals": "Provisioning", "Fibre/Hide/Wood": "Provisioning",
+            "Fuel": "Provisioning", "Potable Water": "Provisioning",
+            "Food": "Provisioning", "Biodiversity": "Provisioning",
+            "Disease Regulation": "Regulating", "Waste Treatment": "Regulating",
+            "Climate Regulation": "Regulating", "Atmospheric Regulation": "Regulating",
+            "Water Regulation": "Regulating", "Pollination": "Regulating",
+            "Coastline Regulation": "Regulating",
+            "Primary Production": "Supporting", "Soil Formation": "Supporting",
+            "Nutrient Cycling": "Supporting",
+            "Inspiration/Education": "Cultural", "Aesthetic": "Cultural",
+            "Recreation": "Cultural", "Cultural Heritage": "Cultural",
+            "Spiritual": "Cultural", "Cultural Identity": "Cultural",
+        }
+        df["service_category"] = df["ecosystem_service"].map(_SERVICE_TO_FAMILY)
+        options["families"] = sorted(df["service_category"].dropna().unique().tolist())
+
     return df, options, meta, tiers
 
 df_all, OPTIONS, META, TIERS = load_data()
@@ -210,13 +388,16 @@ df_all, OPTIONS, META, TIERS = load_data()
 _OA_PCT = round((df_all["open_access"] != "Closed").mean() * 100)
 _MEDIAN_CITED = int(df_all["times_cited"].median())
 
-@st.cache_data
+@st.cache_data(ttl=_CACHE_TTL_SECONDS)
 def load_abstracts():
     try:
-        _abs_df = pd.read_parquet(_DATA_DIR / "abstracts.parquet")
-        return dict(zip(_abs_df["wos_id"], _abs_df["abstract"]))
-    except FileNotFoundError:
-        return {}
+        return _query_abstracts_from_db()
+    except Exception:
+        try:
+            _abs_df = pd.read_parquet(_DATA_DIR / "abstracts.parquet")
+            return dict(zip(_abs_df["wos_id"], _abs_df["abstract"]))
+        except FileNotFoundError:
+            return {}
 
 ABSTRACTS = load_abstracts()
 
@@ -264,18 +445,7 @@ def _submit_feedback(wos_id, doi, title, current_category, current_service,
         return False
 
 
-# The 22-service whitelist. Defined once here (not derived from the data)
-# because two services — Spiritual and Cultural Identity — currently have
-# zero papers and would silently disappear from any df.unique()-based list.
-_ALL_SERVICES = [
-    "Biochemicals", "Fibre/Hide/Wood", "Fuel", "Potable Water",
-    "Food", "Biodiversity", "Disease Regulation", "Waste Treatment",
-    "Climate Regulation", "Atmospheric Regulation", "Water Regulation",
-    "Pollination", "Coastline Regulation", "Primary Production",
-    "Soil Formation", "Nutrient Cycling", "Inspiration/Education",
-    "Aesthetic", "Recreation", "Cultural Heritage", "Spiritual",
-    "Cultural Identity",
-]
+# (── _ALL_SERVICES moved up to before load_data(), see DATA LOADING section ──)
 
 # ════════════════════════════════════════════════════════════════
 # URL STATE SYNC 
@@ -320,9 +490,15 @@ if "state_initialized" not in st.session_state:
 # SIDEBAR: CASCADING FILTERS
 # ════════════════════════════════
 with st.sidebar:
-    _eb, _reset = st.columns([2, 1])
+    _eb, _refresh, _reset = st.columns([2, 1, 1])
     with _eb:
         st.markdown('<div class="exp-eyebrow">Data Controls</div>', unsafe_allow_html=True)
+    with _refresh:
+        if st.button("🔄", key="refresh_data_btn", use_container_width=True,
+                      help="Force a fresh query — otherwise data auto-refreshes every 15 min"):
+            load_data.clear()
+            load_abstracts.clear()
+            st.rerun()
     with _reset:
         if st.button("Clear all", key="clear_filters_btn", use_container_width=True):
             st.query_params.clear()
@@ -479,14 +655,28 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# Fallback banner — only shows when the DB was unreachable and we're
+# serving the last local parquet snapshot instead.
+if META.get("_data_source") == "fallback_parquet":
+    st.warning(
+        "⚠ Could not reach the database — showing a locally cached snapshot "
+        "instead of live data. New papers added since the last successful "
+        "sync won't appear here. Try the 🔄 refresh button in the sidebar, "
+        "or check the DATABASE_URL / network configuration.",
+        icon="⚠️",
+    )
+
 # Health bar
+_source_label = "database (live)" if META.get("_data_source") == "db" else "local snapshot (fallback)"
 st.markdown(
     f"""<div style="
         font: 500 .72rem/1.4 'JetBrains Mono', monospace;
         color: #64748B; margin: 0.2rem 0 1.2rem;
         padding-bottom: 0.7rem; border-bottom: 1px solid #E2E8F0;
     ">
-      data as of {META.get("dataset_version", "—")}
+      corpus baseline: {META.get("dataset_version", "—")}
+      &nbsp;·&nbsp; source: {_source_label}
+      &nbsp;·&nbsp; loaded {META.get("_loaded_at", "—")}
       &nbsp;·&nbsp; open access: {_OA_PCT}%
       &nbsp;·&nbsp; corpus median citations: {_MEDIAN_CITED}
     </div>""",
