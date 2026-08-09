@@ -1,0 +1,17 @@
+# Dashboard requirements — narrative page (app.py) + Data Explorer (pages/explorer.py)
+
+streamlit>=1.58.0
+pandas>=2.0
+plotly>=5.18
+numpy>=1.26
+pyarrow>=14.0          # parquet engine
+openpyxl>=3.1         
+streamlit-aggrid>=1.0.5
+
+# Explorer.py: direct PostgreSQL queries + fallback
+# to local parquet if the DB is unreachable.
+psycopg2-binary>=2.9
+
+# Explorer.py: crowd-sourced misclassification report submission via Google Sheets.
+gspread
+google-auth
