@@ -1,0 +1,66 @@
+# ════════════════════════════════════════════════════════════════
+# Secrets & credentials — NEVER commit these
+# ════════════════════════════════════════════════════════════════
+.env
+.env.*
+!.env.example
+
+.streamlit/secrets.toml
+
+# Service account key files. Naming isn't fully predictable (whoever
+# downloads a new key from Cloud Console can name it anything), so this
+# is a safety net, not a guarantee — do not rely on filename patterns
+# alone. Keep credential files OUTSIDE the repo directory entirely where
+# possible (e.g. ~/meco-service-account.json, not ./meco-service-account.json).
+*service-account*.json
+*service_account*.json
+*-key.json
+
+# Explicit folder rule — safer than filename matching alone. If any
+# credentials folder exists inside the repo tree (e.g. google_api_key/),
+# it is ignored wholesale regardless of what's inside it.
+google_api_key/
+credentials/
+secrets/
+
+# AWS / SSH keys — should never be anywhere near the repo, but just in case
+*.pem
+*.ppk
+
+# ════════════════════════════════════════════════════════════════
+# Pipeline scratch / local-only directories
+# ════════════════════════════════════════════════════════════════
+# run_pipeline.py's working directory — downloads, merged batches, etc.
+# Safe to delete/regenerate at any time.
+run_pipeline_work/
+
+# run_pipeline.py's permanent local WoS metadata archive. This is real
+# data (needed for Chain B — see run_pipeline.py's module docstring) but
+# it's large, host-specific, and regenerable from Drive's processed/
+# folder if ever lost — not meant to live in git history.
+data/wos_archive/
+
+# classify.py's default local output dir (auto_ingest / needs_review /
+# human_reviewed CSVs) — these are working files consumed by
+# ingest_incremental.py, not deliverables.
+classify_output/
+
+# ════════════════════════════════════════════════════════════════
+# Python
+# ════════════════════════════════════════════════════════════════
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+venv/
+.venv/
+env/
+*.egg-info/
+
+# ════════════════════════════════════════════════════════════════
+# OS / editor cruft
+# ════════════════════════════════════════════════════════════════
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
