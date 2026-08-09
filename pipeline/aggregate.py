@@ -615,6 +615,34 @@ print(f"  Cols: {len(papers_df.columns)}  -> {COLUMN_ORDER}")
 print(f"  Size: {size_mb:.1f} MB (snappy-compressed parquet)")
 
 
+# ════════════════════════════════════════════════════════════════
+# STEP 6b abstracts.parquet — Explorer's lazy-loaded abstract export
+# ════════════════════════════════════════════════════════════════
+# Same scope as STEP 6 (unfiltered by dataset_id — Explorer needs ALL
+# current data, not just legacy). Kept as a separate file rather than a
+# column on papers_classified.parquet so the main Explorer grid stays fast;
+# abstracts are only loaded when a row is expanded or exported.
+abstracts_sql = """
+SELECT p.wos_id, p.abstract
+FROM papers p
+JOIN classifications c ON p.wos_id = c.wos_id
+WHERE p.is_review = FALSE
+  AND c.is_current = TRUE
+  AND c.decision = 'Y'
+  AND c.ecosystem_service = ANY(%s)
+  AND p.abstract IS NOT NULL
+"""
+abstracts_df = pd.read_sql(abstracts_sql, conn, params=(list(VALID_SERVICES),))
+
+abstracts_path = OUTPUT_DIR / "abstracts.parquet"
+abstracts_df.to_parquet(abstracts_path, compression="snappy", index=False)
+
+abstracts_size_mb = os.path.getsize(abstracts_path) / (1024 * 1024)
+print(f"  Rows: {len(abstracts_df):,} (of {len(papers_df):,} explorer papers — "
+      f"{len(papers_df) - len(abstracts_df):,} have no abstract)")
+print(f"  Size: {abstracts_size_mb:.1f} MB (snappy-compressed parquet)")
+
+
 # In[17]:
 
 
@@ -1179,7 +1207,7 @@ print(f"  Framing words: {len(framing_words_out)}/{len(FRAMING_WORDS)}")
 conn.close()
 elapsed = time.time() - t0
 print(f"\n✓ All files written to {OUTPUT_DIR.resolve()}/")
-for fname in ("corpus_meta.json", "services_summary.json", "annual_by_category.json", "country_oa.json", "support_spotlight.json","wos_discovery.json", "wos_cooccurrence.json","framing_discovery.json", "framing.json", "papers_classified.parquet"):
+for fname in ("corpus_meta.json", "services_summary.json", "annual_by_category.json", "country_oa.json", "support_spotlight.json","wos_discovery.json", "wos_cooccurrence.json","framing_discovery.json", "framing.json", "papers_classified.parquet", "abstracts.parquet"):
     fpath = OUTPUT_DIR / fname
     size = os.path.getsize(fpath) / 1024 
     unit = "KB" if size < 1024 else "MB"
