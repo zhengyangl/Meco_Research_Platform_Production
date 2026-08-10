@@ -28,6 +28,12 @@ if not DB_URI:
 OUTPUT_DIR = Path("dashboard_data")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Discovery-stage reference files (wos_discovery.json, framing_discovery.json)
+# are intermediate/manual-review material, not read by the dashboard — kept
+# in their own subfolder so they don't clutter the actual dashboard inputs.
+DISCOVERY_DIR = OUTPUT_DIR / "discovery_data"
+DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
+
 # ══════════════════════════════════════════════════════════════════
 # LEGACY vs. LIVE DATA SPLIT (confirmed design, Aug 2026)
 # ══════════════════════════════════════════════════════════════════
@@ -731,7 +737,7 @@ discovery_out = {
     "cooccurrences": edges_out,
     "generated_at":  datetime.now(timezone.utc).isoformat(timespec="seconds"),
 }
-write_json(OUTPUT_DIR / "wos_discovery.json", discovery_out)
+write_json(DISCOVERY_DIR / "wos_discovery.json", discovery_out)
 
 # --- Human-readable summary to stdout ---
 print(f"\n── WoS discovery · top {TOP_N_DISCOVERY} categories ──")
@@ -1112,7 +1118,7 @@ framing_disc = {
     },
     "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
 }
-write_json(OUTPUT_DIR / "framing_discovery.json", framing_disc)
+write_json(DISCOVERY_DIR / "framing_discovery.json", framing_disc)
 
 
 # ── Human-readable summary ──────────────────────────────────────
@@ -1158,7 +1164,7 @@ FRAMING_WORDS = [
 ]
 
 # Load discovery data and look up each curated word's stats by display name.
-with open(OUTPUT_DIR / "framing_discovery.json", encoding="utf-8") as f:
+with open(DISCOVERY_DIR / "framing_discovery.json", encoding="utf-8") as f:
     _framing_disc = json.load(f)
 
 _disc_lookup = {}
@@ -1207,10 +1213,24 @@ print(f"  Framing words: {len(framing_words_out)}/{len(FRAMING_WORDS)}")
 conn.close()
 elapsed = time.time() - t0
 print(f"\n✓ All files written to {OUTPUT_DIR.resolve()}/")
-for fname in ("corpus_meta.json", "services_summary.json", "annual_by_category.json", "country_oa.json", "support_spotlight.json","wos_discovery.json", "wos_cooccurrence.json","framing_discovery.json", "framing.json", "papers_classified.parquet", "abstracts.parquet"):
+_DASHBOARD_FILES = ["corpus_meta.json", "services_summary.json", "annual_by_category.json",
+                     "country_oa.json", "support_spotlight.json", "wos_cooccurrence.json",
+                     "framing.json", "papers_classified.parquet", "abstracts.parquet"]
+_DISCOVERY_FILES = ["wos_discovery.json", "framing_discovery.json"]
+
+for fname in _DASHBOARD_FILES:
     fpath = OUTPUT_DIR / fname
-    size = os.path.getsize(fpath) / 1024 
+    size = os.path.getsize(fpath) / 1024
     unit = "KB" if size < 1024 else "MB"
     val  = size if size < 1024 else size / 1024
     print(f"  {fname:32s} {val:>7.1f} {unit}")
+
+print(f"\n  discovery_data/ (reference material, not read by the dashboard):")
+for fname in _DISCOVERY_FILES:
+    fpath = DISCOVERY_DIR / fname
+    size = os.path.getsize(fpath) / 1024
+    unit = "KB" if size < 1024 else "MB"
+    val  = size if size < 1024 else size / 1024
+    print(f"    {fname:30s} {val:>7.1f} {unit}")
+
 print(f"\n  Total elapsed: {elapsed:.1f}s")
