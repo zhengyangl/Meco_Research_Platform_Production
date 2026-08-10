@@ -102,5 +102,5 @@ The Data Explorer shows everything currently in the database, which grows over t
 
 ## Tech stack
 
-**Dashboard:** Streamlit · Plotly · pandas · NumPy · PyArrow · streamlit-aggrid
-**Pipeline:** PostgreSQL · Qwen-2.5-72B via OpenRouter (ongoing classification; the original corpus was classified with GPT-4.1) · sentence-transformers (technology clustering) · Google Sheets & Drive APIs (human review queue, misclassification feedback, new-data detection)
+- **Dashboard:** Streamlit · Plotly · pandas · NumPy · PyArrow · streamlit-aggrid
+- **Pipeline:** PostgreSQL · Qwen-2.5-72B via OpenRouter (ongoing classification; the original corpus was classified with GPT-4.1) · sentence-transformers (technology clustering) · Google Sheets & Drive APIs (human review queue, misclassification feedback, new-data detection)
