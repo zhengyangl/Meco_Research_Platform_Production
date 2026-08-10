@@ -248,13 +248,15 @@ repo/
 │   └── config.toml
 ├── .env.example
 ├── .gitignore
-├── requirements.txt               # Dashboard only, lightweight
-├── requirements_pipeline.txt      # Pipeline + LLM + embedding libraries
+├── schema.sql                      # ← NEW — one-time DB bootstrap (tested against a real Postgres 16 instance)
+├── requirements.txt                 # Dashboard only, lightweight
+├── requirements_pipeline.txt        # Pipeline + LLM + embedding libraries
 └── docs/
-    ├── README.md                  # Start here
-    ├── architecture.md            # This document
-    ├── data_dictionary.md         # What the data means
-    ├── data_schema_supplement.md  # Field-by-field schema reference
-    ├── prompt_specification.md    # The exact classification prompt + version history
-    └── handover.md                # How to actually operate this — AWS, DB, credentials
+    ├── README.md                    # Start here
+    ├── architecture.md              
+    ├── data_dictionary.md           
+    ├── data_schema_supplement.md    
+    ├── prompt_specification.md     
+    ├── environment_setup.md         # ← NEW — one-time setup (AWS, server, DB, OpenRouter, Google Cloud)
+    └── handover.md                  # Day-to-day operation, troubleshooting, Google Sheets/Drive design notes
 ```
