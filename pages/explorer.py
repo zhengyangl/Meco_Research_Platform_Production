@@ -461,26 +461,45 @@ def _read_qp_list(key, valid_set):
     return [v for v in raw.split(",") if v in valid_set]
 
 # Defaults driven by URL (fall back to empty / full range when absent).
-
-if "state_initialized" not in st.session_state:
-    st.session_state.state_initialized = True
+#
+# Confirmed bug (Aug 2026): a single umbrella "state_initialized" flag meant
+# that if Streamlit ever failed to re-render one of the filter widgets on a
+# given rerun (observed specifically after clicking the manual refresh
+# button, which triggers two reruns in quick succession — see
+# handover.md), that widget's session_state key could be dropped, and
+# because the umbrella flag was already True, it would never be restored —
+# causing a hard AttributeError on the next read. Each key below is now
+# checked and restored individually, every run. This costs nothing
+# (a handful of dict lookups) and makes a dropped key self-heal on the very
+# next rerun instead of crashing.
+if "f_category" not in st.session_state:
     st.session_state.f_category = _read_qp_list("paradigm", set(OPTIONS["categories"]))
-    st.session_state.f_family   = _read_qp_list("family",   set(OPTIONS["families"]))
-    st.session_state.f_service  = _read_qp_list("service",  set(OPTIONS["services"]))
-    st.session_state.f_journal  = _read_qp_list("journal",  set(OPTIONS["journals"]))
-    
-    st.session_state.f_oa            = []
-    st.session_state.f_country       = []
-    st.session_state.f_institution   = []
-    st.session_state.f_tech_cluster  = []
-    st.session_state.f_funding       = []
-    
+if "f_family" not in st.session_state:
+    st.session_state.f_family = _read_qp_list("family", set(OPTIONS["families"]))
+if "f_service" not in st.session_state:
+    st.session_state.f_service = _read_qp_list("service", set(OPTIONS["services"]))
+if "f_journal" not in st.session_state:
+    st.session_state.f_journal = _read_qp_list("journal", set(OPTIONS["journals"]))
+
+if "f_oa" not in st.session_state:
+    st.session_state.f_oa = []
+if "f_country" not in st.session_state:
+    st.session_state.f_country = []
+if "f_institution" not in st.session_state:
+    st.session_state.f_institution = []
+if "f_tech_cluster" not in st.session_state:
+    st.session_state.f_tech_cluster = []
+if "f_funding" not in st.session_state:
+    st.session_state.f_funding = []
+
+if "f_year" not in st.session_state:
     _dflt_year_min = int(_qp.get("year_min", OPTIONS["years"][0]))
     _dflt_year_max = int(_qp.get("year_max", OPTIONS["years"][-1]))
     st.session_state.f_year = (
         max(int(OPTIONS["years"][0]), min(int(OPTIONS["years"][-1]), _dflt_year_min)),
         max(int(OPTIONS["years"][0]), min(int(OPTIONS["years"][-1]), _dflt_year_max))
     )
+if "f_min_cit" not in st.session_state:
     try:
         st.session_state.f_min_cit = max(0, int(_qp.get("min_cited", 0)))
     except (TypeError, ValueError):
@@ -1528,43 +1547,49 @@ with st.expander("🚩 Report a Misclassification"):
 # ════════════════════════════════════════════════════════════════
 st.markdown('<div style="margin-top:1.4rem;"></div>', unsafe_allow_html=True)
 with st.expander("📊 How were these papers classified? (Methodology & data lineage)"):
-    st.markdown(f"""
-**Source corpus.** {META.get("total_papers", 68917):,} unique publications
-retrieved from Web of Science using `biomim*` / `bioinspir*` queries,
-2004–2025. After removing {META.get("reviews", 9318):,} review articles,
-{META.get("non_review", 59599):,} original-research papers remained.
+	st.markdown(f"""
+**Source corpus.** Papers are retrieved from Web of Science using
+`biomim*` / `bioinspir*` queries, 2004–present. Review and survey
+articles are excluded from classification. The current corpus size is
+shown above — this panel explains *how* papers are classified, not a
+snapshot of *how many*.
 
-**Classification.** Each paper was classified by **GPT-4.1** using a
-structured prompt developed for Jacobs et al. (2025). The model decides:
+**Classification.** The original corpus was classified with **GPT-4.1**,
+using a structured prompt developed for Jacobs et al. (2025). Papers added
+since then are classified with **Qwen-2.5-72B-instruct**, selected after
+benchmarking against GPT-4.1 and DeepSeek on a human-labeled validation
+set. For each paper, the model decides:
 
 - **Decision (Y/N):** Does this paper describe a technology contributing
-  to at least one ecosystem service? Yes for **{META.get("decision_y", 31559):,}**
-  papers (≈ {round(META.get("decision_y", 31559) / META.get("non_review", 59599) * 100)}% of non-reviews).
+  to at least one ecosystem service?
 - **Category (R/E/S):** Does the technology *Replace*, *Enhance*, or *Support*
   the natural process? Boundaries defined in the published prompt.
-- **Ecosystem service:** Which of the 22 services (per Costanza et al. 1997
-  + IPBES extensions) does it target?
+- **Ecosystem service:** Which of the 22 services does it target?
 - **Technology:** Free-text label for the bio-inspired technology described.
+
+**Confidence and human review.** The model also reports its own confidence
+(high / medium / low) in each classification. High-confidence results are
+written to the database automatically; medium- and low-confidence results
+are instead sent to a review queue for a person to check before they enter
+the database — so not every row in this dataset is a raw, unverified model
+output.
 
 **Defensive filtering.** Two LLM hallucination values (`"Cultural"`,
 `"Ecosystem monitoring"`) appeared in initial outputs and were filtered
-out by a 22-service whitelist in `aggregate.py`. Both edge cases happened
-to be review articles, so they would have been excluded by the
-`is_review = FALSE` filter regardless.
+out by a 22-service whitelist in `aggregate.py`. Neither is a valid
+ecosystem service under this framework.
 
 **Versioning.** Every classification result is stored in PostgreSQL with
-its `model_version`, `prompt_version`, and `run_id`. When the corpus is
-re-classified with a newer model, historical results are preserved —
-the dashboard always reads `is_current = TRUE` rows. Raw LLM JSON
-responses are kept in the `classification_audit` table for replication.
+its `model_version`, `prompt_version`, and `run_id`. When a paper is
+reclassified, historical results are preserved — the dashboard always
+reads `is_current = TRUE` rows. Raw LLM JSON responses are kept in the
+`classification_audit` table for replication.
 
 **Reproduce these numbers.** The full pipeline (ingestion → LLM classify
 → aggregate → static JSON/Parquet) is fully open-source. See the 
-[**GitHub Repository ↗**](https://github.com/XX/data_platform) 
-for the codebase and `docs/handover.md` for the 5-step update procedure.
-
-*Data version: {META.get("dataset_version", "—")} ·
-Aggregate generated: {META.get("generated_at", "—")}*
+[**GitHub Repository ↗**](https://github.com/zhengyangl/Meco_Research_Platform_Production) 
+for the codebase and `docs/handover.md` for how the pipeline is operated
+day to day.
     """)
 # ════════════════════════════════════════════════════════════════
 # EXPORT
