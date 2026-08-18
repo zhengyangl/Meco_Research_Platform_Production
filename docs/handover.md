@@ -47,6 +47,17 @@ These three are independent — see `architecture.md` Section 3.4 for why they'r
 
 The Explorer itself needs no manual step — it queries the database directly and refreshes on its own every 15 minutes.
 
+### 3.1 If self-hosted on EC2 (see environment_setup.md Section 11)
+
+Once the dashboard moves off Streamlit Community Cloud, both apps run as systemd services instead of ad-hoc `streamlit run` commands:
+
+```bash
+sudo systemctl status meco-narrative      # check if running
+sudo systemctl restart meco-narrative     # restart after a code update
+sudo journalctl -u meco-narrative -f      # tail live logs
+```
+Same commands apply to `meco-explorer`. This is not yet the current setup — see Section 9.
+
 ---
 
 ## 4. Connecting to the server and database
@@ -154,6 +165,7 @@ Real issues hit while building and testing this pipeline, in case they come up a
 | `pip install` fails with a disk-related error even though `df -h` shows plenty of free space | `/tmp` is a small tmpfs (RAM-backed), not the main disk — large packages like `torch` don't fit there even when the real disk has room | `mkdir -p ~/pip_tmp && export TMPDIR=~/pip_tmp` before installing. Full detail in `environment_setup.md` Section 5. |
 | `UserWarning: pandas only supports SQLAlchemy connectable...` when using `pd.read_sql` with a raw `psycopg2` connection | Harmless — pandas prefers a SQLAlchemy engine but works fine with a plain `psycopg2` connection too | Safe to ignore. |
 | `file_cache is only supported with oauth2client<4.0.0` when using the Google Drive API | A version-mismatch warning from the `google-api-python-client` library | Harmless, doesn't affect functionality. Only worth fixing if it becomes visually annoying — not a functional bug. |
+| Explorer's sidebar filters don't respond when clicked (page loads, nothing happens) — *only applies once self-hosted, see environment_setup.md Section 11* | nginx reverse proxy is missing the WebSocket headers (`proxy_http_version 1.1`, `Upgrade`/`Connection`) — Streamlit needs a live WebSocket for interactivity | Add the missing headers to the nginx config block, then `sudo nginx -t && sudo systemctl restart nginx` |
 
 ---
 
@@ -195,3 +207,4 @@ Real issues hit while building and testing this pipeline, in case they come up a
 - **`cluster_technologies()`'s low-confidence assignments aren't blocked, only logged.** A new paper with a technology phrase that doesn't closely resemble any of the 25 existing clusters still gets force-assigned to the nearest one. If the "low confidence" count in a run's output starts looking large, that's a signal the 25 clusters may need revisiting (see `data_dictionary.md` Section 7) — the pipeline won't decide that on its own.
 - **The full `new-data` chain hasn't been run end-to-end against real new papers in production yet.** Drive detection has been confirmed working. The individual pieces (`classify.py`, `ingest_incremental.py`, `text_analysis.py`) have each been tested separately, and `cluster_technologies()` specifically has been run for real against the live database (successfully recomputed centroids from 35,433 labeled papers). But the full chain — a real new file, classified, auto-ingested, and features extracted, all through `run_pipeline.py new-data` without `--dry-run` — has not yet been exercised together. Do this as an early test with a small batch before relying on it for anything real.
 - **The Feedback Sheet ID in Section 2 needs confirming.** It's carried over from project notes rather than freshly verified against `explorer.py`'s actual configuration.
+- - **The dashboard is still hosted on Streamlit Community Cloud, not the self-hosted EC2 + nginx setup described in `environment_setup.md` Section 11.** That migration is planned — motivated by removing Streamlit's free-tier branding icons for a cleaner embed into the ME website — but hasn't been executed yet. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
