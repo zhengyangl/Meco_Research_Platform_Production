@@ -326,5 +326,168 @@ Work through these in order. If any step fails, stop and fix it before moving to
 - [ ] `echo $DATABASE_URL` (etc.) shows the values you set, not blank
 - [ ] `python3 pipeline/classify.py --dry-run --input <any small test file>` runs without an environment-variable error (see `handover.md` for what a real dry run looks like)
 - [ ] `python3 pipeline/run_pipeline.py new-data --dry-run` successfully lists files in the Drive folder (confirms the Google service account setup works end to end)
+---
+
+## 11. Self-Hosting the Dashboard on EC2 (nginx + systemd)
+
+*Status: this is the target architecture, not yet executed — the dashboard is currently still on Streamlit Community Cloud. See `handover.md` Section 9.*
+
+Two platforms were evaluated and rejected before landing on this approach:
+
+- **Staying on Streamlit Community Cloud long-term** — free, but the free tier permanently injects two branding icons ("Hosted with Streamlit", a creator-profile badge) into the bottom-right corner of every app. There is no official way to remove them; only self-hosting outside Community Cloud removes them, since they're injected by the hosting layer itself, not the Streamlit framework.
+- **Streamlit in Snowflake (SiS)** — rejected. `explorer.py`'s main table depends entirely on AgGrid (`GridOptionsBuilder`, custom `JsCode` renderers for DOI links and paradigm color-coding), and AgGrid does not run inside SiS's sandbox — this is a known platform limitation (confirmed via Snowflake's own community forum), not something a package install fixes. Migrating would mean rewriting the Explorer's table with `st.dataframe` (losing custom cell rendering) and rebuilding the data-loading layer to read from Snowflake Stages instead of local parquet/JSON. Not worth it for this project.
+
+The plan below keeps every line of existing code unchanged — both apps run exactly as they do today, just self-hosted instead of on Community Cloud.
+
+### 11.1 Why a domain is required (not just the server's IP)
+
+The ME website (Squarespace) is served over HTTPS. Browsers block an HTTPS page from embedding an HTTP iframe ("mixed content"). So the dashboard must also run over HTTPS — and Let's Encrypt (the free certificate authority used below) only issues certificates for domain names, never for a bare IP address.
+
+The simplest path: ask whoever manages the lab's domain to add a subdomain (e.g. `dashboard.manufacturedecosystems.com`) pointed at the EC2 server. If the domain is already owned, adding a subdomain costs nothing.
+
+### 11.2 Install nginx
+
+```bash
+sudo apt update
+sudo apt install nginx -y
+```
+
+### 11.3 Run both apps on separate ports
+
+```bash
+# Narrative page
+streamlit run app.py --server.port 8501
+
+# Data Explorer
+streamlit run explorer.py --server.port 8502
+```
+
+(This is just to confirm both apps start correctly on distinct ports before wiring up systemd — Ctrl+C out of these once confirmed.)
+
+### 11.4 Make both apps persistent with systemd
+
+Without this, both apps stop the moment the SSH session disconnects.
+
+```bash
+sudo nano /etc/systemd/system/meco-narrative.service
+```
+
+```ini
+[Unit]
+Description=MEco Narrative Dashboard
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/meco_dashboard
+ExecStart=/usr/bin/python3 -m streamlit run app.py --server.port 8501 --server.headless true
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Repeat for the Explorer (`meco-explorer.service`), changing the port to `8502` and the script to `explorer.py`.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable meco-narrative meco-explorer
+sudo systemctl start meco-narrative meco-explorer
+```
+
+`Restart=always` means both apps come back automatically after a crash or server reboot — no manual restart needed.
+
+### 11.5 nginx reverse proxy — WebSocket headers are not optional
+
+```bash
+sudo nano /etc/nginx/sites-available/meco
+```
+
+```nginx
+server {
+    listen 80;
+    server_name dashboard.manufacturedecosystems.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8501;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+
+    location /explorer/ {
+        proxy_pass http://127.0.0.1:8502/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+**The `proxy_http_version 1.1` and `Upgrade`/`Connection` lines are required, not optional.** Streamlit relies on a WebSocket connection for interactivity (filters, reruns). Without these exact lines, the page loads visually but nothing responds when clicked — a nginx config that looks "basically right" but is missing these will produce a dashboard that appears broken with no error message anywhere.
+
+```bash
+sudo ln -s /etc/nginx/sites-available/meco /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 11.6 DNS + HTTPS
+
+1. Have whoever controls the domain's DNS add an A record: `dashboard` → the EC2 instance's public IP.
+2. Install the certificate:
+
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d dashboard.manufacturedecosystems.com
+```
+
+`certbot` rewrites the nginx config for HTTPS automatically and sets up auto-renewal (Let's Encrypt certificates expire every 90 days; no manual renewal needed after this).
+
+### 11.7 Security group
+
+In the AWS Console, confirm ports **80 and 443** are open to `0.0.0.0/0`. Ports 8501/8502 should **not** be open externally — nginx is the only thing that needs to reach them, and it does so over localhost.
+
+### 11.8 Embedding into the Squarespace site
+
+Requires a Squarespace **Business plan or higher** — the Embed/Code block used here isn't available on the Personal plan.
+
+1. Edit the target page → add an **Embed** block (or **Code** block, same effect) → paste:
+
+```html
+<iframe src="https://dashboard.manufacturedecosystems.com/?embed=true"
+        style="height: 1200px; width: 100%; border: none;">
+</iframe>
+```
+
+2. `?embed=true` removes Streamlit's top toolbar. On a self-hosted app (unlike Community Cloud), there's no bottom-right branding to worry about — it only exists on the free hosting tier.
+3. **iframe height is fixed, app content is not.** If a user expands something or a filtered table grows longer than the iframe's set height, it either scrolls inside the iframe (double-scrollbar) or gets cut off. There's no official auto-resize; starting with a generous fixed height (1200px+) is the practical workaround.
+4. Test at mobile width specifically before considering this done — the Explorer's sidebar filters are especially prone to being squeezed in a narrow iframe.
+
+### 11.9 Cost
+
+| Item | Monthly cost |
+|---|---|
+| EC2 instance (t3.small, if upgraded from t3.micro) | ~$15.18 |
+| EBS storage | ~$1–3 |
+| Domain/subdomain | $0 if added under an existing domain |
+| SSL certificate (Let's Encrypt) | $0 |
+| Outbound data transfer | $0 (covered by AWS's free 100GB/month tier at this project's traffic level) |
+
+Roughly **$16–20/month** total, versus $0 on Streamlit Community Cloud. Get an exact figure after a month of real usage via AWS Console → Billing → Cost Explorer, rather than relying on the estimate above — small extras (CloudWatch, EBS snapshots) sometimes show up that aren't obvious in advance.
+
+### 11.10 Verification checklist
+
+- [ ] Both `systemctl status meco-narrative` and `meco-explorer` show `active (running)`
+- [ ] `https://dashboard.manufacturedecosystems.com` loads the narrative page over HTTPS with a valid certificate (padlock icon, no browser warning)
+- [ ] The Explorer's sidebar filters actually filter the table when clicked (confirms the WebSocket proxy headers are correct — if filters don't respond, revisit Section 11.5)
+- [ ] Reboot the EC2 instance and confirm both apps come back up on their own (confirms `systemctl enable` took effect)
+- [ ] Embed the iframe on a Squarespace test page and check it at both desktop and mobile widths
 
 Once all of these pass, the environment is ready. Move on to `handover.md` for how to actually operate the platform day to day.
