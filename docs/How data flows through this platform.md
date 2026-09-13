@@ -7,100 +7,17 @@ chains**. They don't run on the same schedule, and none of them waits for the ot
 For the technical detail behind each script, see `architecture.md` and `handover.md`.
 This page is the map, not the manual.
 
-<p align="center">
-<svg width="100%" viewBox="0 0 680 560" role="img" xmlns="http://www.w3.org/2000/svg">
-<title>MEco pipeline: three independent chains</title>
-<desc>Chain A (new-data), Chain B (reviewed), and Feedback sync run independently and all write into the shared classifications table.</desc>
-<defs>
-<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-<path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-</marker>
-</defs>
-<g font-family="-apple-system,Helvetica,Arial,sans-serif">
+<p align="center"> <svg width="100%" viewBox="0 0 680 560" role="img" xmlns="http://www.w3.org/2000/svg"> <title>MEco pipeline: three independent chains</title> <desc>Chain A (new-data), Chain B (reviewed), and Feedback sync run independently and all write into the shared classifications table.</desc> <defs> <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"> <path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/> </marker> </defs> <g font-family="-apple-system,Helvetica,Arial,sans-serif">
 
-<text x="130" y="55" text-anchor="middle" font-size="14" font-weight="600" fill="#2C2C2A">Chain A</text>
-<text x="130" y="72" text-anchor="middle" font-size="12" fill="#5F5E5A">new-data</text>
-<text x="340" y="55" text-anchor="middle" font-size="14" font-weight="600" fill="#2C2C2A">Chain B</text>
-<text x="340" y="72" text-anchor="middle" font-size="12" fill="#5F5E5A">reviewed</text>
-<text x="550" y="55" text-anchor="middle" font-size="14" font-weight="600" fill="#2C2C2A">Feedback</text>
-<text x="550" y="72" text-anchor="middle" font-size="12" fill="#5F5E5A">crowd feedback</text>
+<text x="130" y="55" text-anchor="middle" font-size="14" font-weight="600" fill="
+#2C2C2A">Chain A</text> <text x="130" y="72" text-anchor="middle" font-size="12" fill="
+#5F5E5A">new-data</text> <text x="340" y="55" text-anchor="middle" font-size="14" font-weight="600" fill="
+#2C2C2A">Chain B</text> <text x="340" y="72" text-anchor="middle" font-size="12" fill="
+#5F5E5A">reviewed</text> <text x="550" y="55" text-anchor="middle" font-size="14" font-weight="600" fill="
+#2C2C2A">Feedback</text> <text x="550" y="72" text-anchor="middle" font-size="12" fill="
+#5F5E5A">crowd feedback</text>
 
-<rect x="40" y="90" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-<text x="130" y="114" text-anchor="middle" font-size="14" fill="#2C2C2A">Upload to Drive</text>
-<line x1="130" y1="130" x2="130" y2="150" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="40" y="150" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-<text x="130" y="174" text-anchor="middle" font-size="14" fill="#085041">Classify (Qwen)</text>
-<line x1="130" y1="190" x2="130" y2="210" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="220" y1="170" x2="250" y2="170" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="40" y="210" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
-<text x="130" y="234" text-anchor="middle" font-size="14" fill="#27500A">Auto-ingest</text>
-<line x1="130" y1="250" x2="130" y2="270" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="40" y="270" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
-<text x="130" y="294" text-anchor="middle" font-size="14" fill="#27500A">Write to DB</text>
-<line x1="130" y1="310" x2="130" y2="330" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="40" y="330" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-<text x="130" y="354" text-anchor="middle" font-size="14" fill="#085041">Extract features</text>
-<line x1="130" y1="370" x2="130" y2="390" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="40" y="390" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-<text x="130" y="414" text-anchor="middle" font-size="14" fill="#2C2C2A">Mark processed</text>
-
-<rect x="250" y="150" width="180" height="40" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
-<text x="340" y="174" text-anchor="middle" font-size="14" fill="#633806">Needs review</text>
-<line x1="340" y1="190" x2="340" y2="210" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="250" y="210" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-<text x="340" y="234" text-anchor="middle" font-size="14" fill="#2C2C2A">Reviewer edits</text>
-<line x1="340" y1="250" x2="340" y2="270" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="250" y="270" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-<text x="340" y="294" text-anchor="middle" font-size="14" fill="#085041">Pull reviewed</text>
-<line x1="340" y1="310" x2="340" y2="330" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="250" y="330" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
-<text x="340" y="354" text-anchor="middle" font-size="14" fill="#27500A">Write to DB</text>
-<line x1="340" y1="370" x2="340" y2="390" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="250" y="390" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-<text x="340" y="414" text-anchor="middle" font-size="14" fill="#085041">Extract features</text>
-
-<rect x="460" y="90" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-<text x="550" y="114" text-anchor="middle" font-size="14" fill="#2C2C2A">Visitor reports</text>
-<line x1="550" y1="130" x2="550" y2="150" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="460" y="150" width="180" height="40" rx="8" fill="#FBEAF0" stroke="#993556" stroke-width="0.5"/>
-<text x="550" y="174" text-anchor="middle" font-size="14" fill="#72243E">Feedback sheet</text>
-<line x1="550" y1="190" x2="550" y2="210" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="460" y="210" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-<text x="550" y="234" text-anchor="middle" font-size="14" fill="#2C2C2A">Reviewer approves</text>
-<line x1="550" y1="250" x2="550" y2="270" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="460" y="270" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
-<text x="550" y="294" text-anchor="middle" font-size="14" fill="#085041">Sync feedback</text>
-<line x1="550" y1="310" x2="550" y2="330" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="460" y="330" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
-<text x="550" y="354" text-anchor="middle" font-size="14" fill="#27500A">Apply correction</text>
-<line x1="550" y1="370" x2="550" y2="390" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="460" y="390" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
-<text x="550" y="414" text-anchor="middle" font-size="14" fill="#2C2C2A">Mark applied</text>
-
-<path d="M130,430 L130,448 L250,448 L250,460" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-<path d="M340,430 L340,460" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-<path d="M550,430 L550,448 L430,448 L430,460" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-<rect x="120" y="460" width="440" height="50" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
-<text x="340" y="490" text-anchor="middle" font-size="14" fill="#3C3489">classifications table (shared destination)</text>
-
-</g>
-</svg>
-</p>
+<rect x="40" y="90" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/> <text x="130" y="114" text-anchor="middle" font-size="14" fill="#2C2C2A">Upload to Drive</text> <line x1="130" y1="130" x2="130" y2="150" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="40" y="150" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/> <text x="130" y="174" text-anchor="middle" font-size="14" fill="#085041">Classify (Qwen)</text> <line x1="130" y1="190" x2="130" y2="210" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <line x1="220" y1="170" x2="250" y2="170" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="40" y="210" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/> <text x="130" y="234" text-anchor="middle" font-size="14" fill="#27500A">Auto-ingest</text> <line x1="130" y1="250" x2="130" y2="270" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="40" y="270" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/> <text x="130" y="294" text-anchor="middle" font-size="14" fill="#27500A">Write to DB</text> <line x1="130" y1="310" x2="130" y2="330" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="40" y="330" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/> <text x="130" y="354" text-anchor="middle" font-size="14" fill="#085041">Extract features</text> <line x1="130" y1="370" x2="130" y2="390" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="40" y="390" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/> <text x="130" y="414" text-anchor="middle" font-size="14" fill="#2C2C2A">Mark processed</text> <rect x="250" y="150" width="180" height="40" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/> <text x="340" y="174" text-anchor="middle" font-size="14" fill="#633806">Needs review</text> <line x1="340" y1="190" x2="340" y2="210" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="250" y="210" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/> <text x="340" y="234" text-anchor="middle" font-size="14" fill="#2C2C2A">Reviewer edits</text> <line x1="340" y1="250" x2="340" y2="270" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="250" y="270" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/> <text x="340" y="294" text-anchor="middle" font-size="14" fill="#085041">Pull reviewed</text> <line x1="340" y1="310" x2="340" y2="330" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="250" y="330" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/> <text x="340" y="354" text-anchor="middle" font-size="14" fill="#27500A">Write to DB</text> <line x1="340" y1="370" x2="340" y2="390" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="250" y="390" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/> <text x="340" y="414" text-anchor="middle" font-size="14" fill="#085041">Extract features</text> <rect x="460" y="90" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/> <text x="550" y="114" text-anchor="middle" font-size="14" fill="#2C2C2A">Visitor reports</text> <line x1="550" y1="130" x2="550" y2="150" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="460" y="150" width="180" height="40" rx="8" fill="#FBEAF0" stroke="#993556" stroke-width="0.5"/> <text x="550" y="174" text-anchor="middle" font-size="14" fill="#72243E">Feedback sheet</text> <line x1="550" y1="190" x2="550" y2="210" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="460" y="210" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/> <text x="550" y="234" text-anchor="middle" font-size="14" fill="#2C2C2A">Reviewer approves</text> <line x1="550" y1="250" x2="550" y2="270" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="460" y="270" width="180" height="40" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/> <text x="550" y="294" text-anchor="middle" font-size="14" fill="#085041">Sync feedback</text> <line x1="550" y1="310" x2="550" y2="330" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="460" y="330" width="180" height="40" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/> <text x="550" y="354" text-anchor="middle" font-size="14" fill="#27500A">Apply correction</text> <line x1="550" y1="370" x2="550" y2="390" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="460" y="390" width="180" height="40" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/> <text x="550" y="414" text-anchor="middle" font-size="14" fill="#2C2C2A">Mark applied</text> <path d="M130,430 L130,448 L250,448 L250,460" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <path d="M340,430 L340,460" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <path d="M550,430 L550,448 L430,448 L430,460" fill="none" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/> <rect x="120" y="460" width="440" height="50" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/> <text x="340" y="490" text-anchor="middle" font-size="14" fill="#3C3489">classifications table (shared destination)</text> </g> </svg> </p>
 
 **How to read the colors:** gray boxes are a person doing something (uploading a file,
 editing a sheet, clicking approve). Teal boxes are a script running on its own. Green
