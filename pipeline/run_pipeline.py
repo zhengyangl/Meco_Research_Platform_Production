@@ -2,10 +2,11 @@
 """
 run_pipeline.py — Master orchestration for the MEco incremental pipeline.
 
-Confirmed design (Aug 2026): TWO DECOUPLED CHAINS, not one linear pipeline —
-because classify.py's confidence routing means some rows need a human to
-fill in the Google review sheet before they can be ingested, and an
-orchestrator should never block waiting on that.
+Confirmed design (Aug 2026, extended Sep 2026): INDEPENDENT, DECOUPLED
+CHAINS, not one linear pipeline — several parts of this system depend on a
+human acting somewhere first (a reviewer finishing a row in a Google Sheet),
+and an orchestrator should never block waiting on that. Each mode below can
+be run on its own schedule, in any order, without the others.
 
     Chain A — "new-data"  (triggered by new files on Google Drive)
         detect new files → classify.py → ingest ONLY auto_ingest rows
@@ -15,9 +16,15 @@ orchestrator should never block waiting on that.
         classify.py --pull-reviewed → ingest the completed rows
         → text_analysis.py --task all
 
+    "feedback"  (periodic, decoupled from A/B)
+        sync_feedback.py — apply APPROVED corrections from the crowd-sourced
+        Feedback Sheet (explorer.py's "Report a Misclassification" form)
+        into the database. Independent of the classify.py review queue
+        above — a different sheet, a different reviewer action.
+
     aggregate.py runs on its OWN weekly schedule — call this script's
-    "aggregate" mode from cron, completely decoupled from A and B. Its
-    output (narrative JSON + Explorer's fallback parquet snapshots)
+    "aggregate" mode from cron, completely decoupled from everything above.
+    Its output (narrative JSON + Explorer's fallback parquet snapshots)
     doesn't need to be fresher than that.
 
 Local WoS metadata archive (confirmed design):
@@ -44,8 +51,12 @@ Usage:
     # Chain B — run periodically (e.g. daily) to pick up finished reviews.
     python run_pipeline.py reviewed
 
-    # Weekly, decoupled from both chains above.
+    # Weekly, decoupled from everything else.
     python run_pipeline.py aggregate
+
+    # Periodic — sync Approved corrections from the crowd-sourced Feedback
+    # Sheet (explorer.py's "Report a Misclassification" form).
+    python run_pipeline.py feedback
 
     # Any mode: preview what would happen without making changes.
     python run_pipeline.py new-data --dry-run
@@ -92,6 +103,7 @@ CLASSIFY_SCRIPT = SCRIPT_DIR / "classify.py"
 INGEST_SCRIPT = SCRIPT_DIR / "ingest_incremental.py"
 TEXT_ANALYSIS_SCRIPT = SCRIPT_DIR / "text_analysis.py"
 AGGREGATE_SCRIPT = SCRIPT_DIR / "aggregate.py"
+FEEDBACK_SCRIPT = SCRIPT_DIR / "sync_feedback.py"
 
 # Candidate column names for the WoS unique ID, used only to de-duplicate
 # rows when merging multiple raw exports together before handing off to
@@ -415,15 +427,37 @@ def chain_aggregate(dry_run: bool):
 
 
 # ────────────────────────────────────────────────────────────────
+# feedback — syncs Approved rows from the crowd-sourced misclassification
+# Feedback Sheet into the DB. Decoupled from Chain A/B and aggregate, same
+# spirit as "reviewed" — a human has to act in the sheet first (mark a row
+# Approved), and this step picks that up whenever it's next run.
+# ────────────────────────────────────────────────────────────────
+def chain_feedback(dry_run: bool):
+    run_id = uuid.uuid4()
+    start_time = datetime.now(timezone.utc)
+
+    run_step(
+        [sys.executable, str(FEEDBACK_SCRIPT)] + (["--dry-run"] if dry_run else []),
+        dry_run, "sync_feedback.py",
+    )
+
+    end_time = datetime.now(timezone.utc)
+    log_orchestrator_run("feedback", 0, run_id, start_time, end_time, dry_run=dry_run)
+    if not dry_run:
+        logger.info(f"sync_feedback.py complete in {(end_time - start_time).total_seconds():.1f}s")
+
+
+# ────────────────────────────────────────────────────────────────
 # Main
 # ────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="MEco master pipeline orchestrator")
     parser.add_argument(
-        "mode", choices=["new-data", "reviewed", "aggregate"],
+        "mode", choices=["new-data", "reviewed", "aggregate", "feedback"],
         help="new-data: detect+classify+ingest new Drive uploads (auto-confidence only). "
              "reviewed: pull finished human reviews and ingest them. "
-             "aggregate: regenerate narrative JSON + Explorer fallback files.",
+             "aggregate: regenerate narrative JSON + Explorer fallback files. "
+             "feedback: sync Approved crowd-sourced misclassification corrections.",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -440,6 +474,8 @@ def main():
         chain_reviewed(args.dry_run)
     elif args.mode == "aggregate":
         chain_aggregate(args.dry_run)
+    elif args.mode == "feedback":
+        chain_feedback(args.dry_run)
 
 
 if __name__ == "__main__":
