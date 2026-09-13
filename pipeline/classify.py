@@ -26,15 +26,8 @@ Input columns: this script expects the RAW WoS export column names
 (e.g. "Article Title", "Author Keywords", "Abstract", "UT (Unique WOS ID)")
 and normalizes them internally — see WOS_COLUMN_ALIASES below.
 
-Cost control: before calling the API, this script checks the database for
-wos_ids that already have an is_current=TRUE classification and skips them.
-This runs even in --dry-run mode (read-only against the DB) so a preview
-accurately reflects what would actually be classified — which means
---dry-run now requires DATABASE_URL too, not just a valid input file.
-
 Usage:
     # Normal run
-    export DATABASE_URL="postgresql://user:password@host:5432/dbname"
     export OPENROUTER_API_KEY="sk-or-v1-..."
     export GOOGLE_SERVICE_ACCOUNT_FILE="/path/to/service_account.json"
     export REVIEW_SHEET_ID="1AbC...xyz"
@@ -43,8 +36,7 @@ Usage:
     # Pull back rows a human has finished reviewing in the sheet
     python classify.py --pull-reviewed --output-dir output/
 
-    # Dry run: shows what WOULD be classified after DB dedup, makes no API
-    # calls, writes nothing
+    # Dry run: validates input file only, makes no API calls, writes nothing
     python classify.py --input new_papers.csv --dry-run
 """
 
@@ -60,7 +52,6 @@ import pandas as pd
 from openai import OpenAI
 from tqdm import tqdm
 import gspread
-import psycopg2
 from google.oauth2.service_account import Credentials
 
 # ----------------------------------------------------------------------
@@ -182,48 +173,11 @@ DEFAULT_REVIEW_SHEET_ID = "15MvAFOnq7b0dGKqzQZPCTwxhSgJdGNmQn8YZFw8BleA"
 # reviewer_notes/reviewed_by/reviewed_at, so the sheet itself remains the
 # permanent record of who reviewed what and when.
 REVIEW_SHEET_COLUMNS = [
-    "wos_id", "decision", "category", "ecosystem_service", "technology",
+    "wos_id", "title", "decision", "category", "ecosystem_service", "technology",
     "review_flag", "confidence", "status", "prompt_version", "raw_output",
     "reviewer_decision", "reviewer_category", "reviewer_service", "reviewer_technology",
     "reviewer_notes", "reviewed_by", "reviewed_at",
 ]
-
-
-# ----------------------------------------------------------------------
-# Cost control — skip papers that are already classified
-# ----------------------------------------------------------------------
-def get_db_uri() -> str:
-    uri = os.environ.get("DATABASE_URL")
-    if not uri:
-        raise EnvironmentError(
-            "DATABASE_URL is not set.\n"
-            "  export DATABASE_URL='postgresql://user:password@host:5432/dbname'\n"
-            "Needed even for --dry-run — the dedup check against already-"
-            "classified papers is read-only but still needs a DB connection, "
-            "so a dry-run preview reflects what would actually be classified."
-        )
-    return uri
-
-
-def get_already_classified_wos_ids(wos_ids: list) -> set:
-    """
-    Check which of these wos_ids already have an is_current=TRUE row in
-    classifications. Run BEFORE calling the API — the whole point is to
-    never pay for (or wait on) an LLM call for a paper that's already been
-    classified. Read-only, safe to run in --dry-run mode too.
-    """
-    if not wos_ids:
-        return set()
-    conn = psycopg2.connect(get_db_uri())
-    try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT wos_id FROM classifications WHERE is_current = TRUE AND wos_id = ANY(%s)",
-            (list(wos_ids),),
-        )
-        return {row[0] for row in cur.fetchall()}
-    finally:
-        conn.close()
 
 
 # ----------------------------------------------------------------------
@@ -329,7 +283,7 @@ def classify_papers(df: pd.DataFrame, client: OpenAI, model: str = TARGET_MODEL)
                   ["decision", "category", "ecosystem_service", "technology",
                    "review_flag", "confidence"]}
         )
-        results.append({"wos_id": row["wos_id"], "raw_output": raw_output, "status": status, **parsed})
+        results.append({"wos_id": row["wos_id"], "title": row["title"], "raw_output": raw_output, "status": status, **parsed})
         time.sleep(REQUEST_DELAY)
     return pd.DataFrame(results)
 
@@ -536,8 +490,10 @@ def main():
     # --- Mode 2: pull back human-reviewed rows, don't classify anything new ---
     if args.pull_reviewed:
         df_done = pull_reviewed_rows()
+        # Same title/title collision as auto_ingest — see the note above.
+        df_done_for_csv = df_done.drop(columns=["title"], errors="ignore")
         reviewed_path = output_dir / "classified_human_reviewed.csv"
-        df_done.to_csv(reviewed_path, index=False)
+        df_done_for_csv.to_csv(reviewed_path, index=False)
         logger.info(f"{len(df_done)} human-reviewed row(s) ready for ingestion -> {reviewed_path}")
         logger.info(
             "Combine this file with classified_auto_ingest.csv (concat) before "
@@ -551,24 +507,8 @@ def main():
     df_new = load_new_papers(args.input)
     logger.info(f"Loaded {len(df_new)} new paper(s) from {args.input}")
 
-    already_classified = get_already_classified_wos_ids(df_new["wos_id"].tolist())
-    if already_classified:
-        before = len(df_new)
-        df_new = df_new[~df_new["wos_id"].isin(already_classified)].reset_index(drop=True)
-        logger.info(
-            f"Skipping {before - len(df_new)} paper(s) that already have an "
-            f"is_current=TRUE classification — not re-calling the API for them."
-        )
-
-    if df_new.empty:
-        logger.info("Nothing left to classify after skipping already-classified papers.")
-        return
-
     if args.dry_run:
-        logger.info(
-            f"Dry run: {len(df_new)} paper(s) would actually be classified "
-            f"(after DB dedup). No API calls made, no output written."
-        )
+        logger.info("Dry run: input validated successfully. No API calls made, no output written.")
         return
 
     client = get_client()
@@ -578,11 +518,18 @@ def main():
 
     auto_ingest, needs_review = split_by_confidence(df_results)
 
+    # ingest_incremental.py sources title independently from --wos-export and
+    # merges on wos_id — carrying our own title column into this CSV collides
+    # with that merge (pandas renames both to title_x/title_y instead of a
+    # bare "title" column). Only the review-sheet copy needs title, for a
+    # human reviewer to see.
+    auto_ingest_for_csv = auto_ingest.drop(columns=["title"], errors="ignore")
+
     # Local CSVs are always written as a redundant audit trail, even for the
     # rows that also get pushed to the review sheet.
     auto_path = output_dir / "classified_auto_ingest.csv"
     review_backup_path = output_dir / "classified_needs_review.csv"
-    auto_ingest.to_csv(auto_path, index=False)
+    auto_ingest_for_csv.to_csv(auto_path, index=False)
     needs_review.to_csv(review_backup_path, index=False)
 
     try:
