@@ -28,12 +28,6 @@ if not DB_URI:
 OUTPUT_DIR = Path("dashboard_data")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Discovery-stage reference files (wos_discovery.json, framing_discovery.json)
-# are intermediate/manual-review material, not read by the dashboard — kept
-# in their own subfolder so they don't clutter the actual dashboard inputs.
-DISCOVERY_DIR = OUTPUT_DIR / "discovery_data"
-DISCOVERY_DIR.mkdir(parents=True, exist_ok=True)
-
 # ══════════════════════════════════════════════════════════════════
 # LEGACY vs. LIVE DATA SPLIT (confirmed design, Aug 2026)
 # ══════════════════════════════════════════════════════════════════
@@ -146,14 +140,12 @@ reviews    = int(meta_df["reviews"][0])
 decision_y_sql = """
 SELECT COUNT(*) AS decision_y
 FROM papers p
-JOIN classifications c ON p.wos_id = c.wos_id
+JOIN classifications_narrative_snapshot c ON p.wos_id = c.wos_id
 WHERE p.is_review = FALSE
-  AND p.dataset_id = ANY(%s)
-  AND c.is_current = TRUE
   AND c.decision = 'Y'
   AND c.ecosystem_service = ANY(%s)
 """
-decision_y_df = pd.read_sql(decision_y_sql, conn, params=(LEGACY_DATASET_IDS, list(VALID_SERVICES)))
+decision_y_df = pd.read_sql(decision_y_sql, conn, params=(list(VALID_SERVICES),))
 decision_y = int(decision_y_df["decision_y"][0])
 
 version_sql = "SELECT version FROM datasets ORDER BY import_date DESC LIMIT 1"
@@ -189,15 +181,13 @@ SELECT
     c.category,
     COUNT(*) AS n
 FROM papers p
-JOIN classifications c ON p.wos_id = c.wos_id
+JOIN classifications_narrative_snapshot c ON p.wos_id = c.wos_id
 WHERE p.is_review = FALSE
-  AND p.dataset_id = ANY(%s)
-  AND c.is_current = TRUE
   AND c.decision = 'Y'
   AND c.ecosystem_service = ANY(%s)
 GROUP BY c.ecosystem_service, c.category
 """
-raw = pd.read_sql(svc_sql, conn, params=(LEGACY_DATASET_IDS, list(VALID_SERVICES)))
+raw = pd.read_sql(svc_sql, conn, params=(list(VALID_SERVICES),))
  
 # Pivot to wide form: one row per service, three columns (R/E/S)
 pivot = raw.pivot_table(
@@ -275,17 +265,15 @@ SELECT
     c.category,
     COUNT(*) AS n
 FROM papers p
-JOIN classifications c ON p.wos_id = c.wos_id
+JOIN classifications_narrative_snapshot c ON p.wos_id = c.wos_id
 WHERE p.is_review = FALSE
-  AND p.dataset_id = ANY(%s)
-  AND c.is_current = TRUE
   AND c.decision = 'Y'
   AND c.ecosystem_service = ANY(%s)
   AND p.pub_year IS NOT NULL
 GROUP BY p.pub_year, c.category
 ORDER BY p.pub_year, c.category
 """
-annual_raw = pd.read_sql(annual_sql, conn, params=(LEGACY_DATASET_IDS, list(VALID_SERVICES)))
+annual_raw = pd.read_sql(annual_sql, conn, params=(list(VALID_SERVICES),))
 
 # Pivot: rows = year, columns = Replace/Enhance/Support
 annual_pivot = annual_raw.pivot_table(
@@ -321,15 +309,13 @@ SELECT
      LIMIT 1) AS country_first,
     p.open_access
 FROM papers p
-JOIN classifications c ON p.wos_id = c.wos_id
+JOIN classifications_narrative_snapshot c ON p.wos_id = c.wos_id
 WHERE p.is_review = FALSE
-  AND p.dataset_id = ANY(%s)
-  AND c.is_current = TRUE
   AND c.decision = 'Y'
   AND c.ecosystem_service = ANY(%s)
   AND c.category = 'Replace'
 """
-country_raw = pd.read_sql(country_sql, conn, params=(LEGACY_DATASET_IDS, list(VALID_SERVICES)))
+country_raw = pd.read_sql(country_sql, conn, params=(list(VALID_SERVICES),))
 country_raw = country_raw.dropna(subset=["country_first"])
 
 # is_open: True when open_access has a non-null value other than 'Closed'
@@ -405,10 +391,8 @@ SELECT * FROM (
             ORDER BY p.times_cited DESC NULLS LAST, p.pub_year DESC NULLS LAST
         ) AS rk
     FROM papers p
-    JOIN classifications c ON p.wos_id = c.wos_id
+    JOIN classifications_narrative_snapshot c ON p.wos_id = c.wos_id
     WHERE p.is_review = FALSE
-      AND p.dataset_id = ANY(%s)
-      AND c.is_current = TRUE
       AND c.decision = 'Y'
       AND c.category = 'Support'
       AND c.ecosystem_service = ANY(%s)
@@ -416,7 +400,7 @@ SELECT * FROM (
 ) t
 WHERE rk = 1
 """
-spot_top = pd.read_sql(spotlight_sql, conn, params=(LEGACY_DATASET_IDS, SPOTLIGHT_SERVICES))
+spot_top = pd.read_sql(spotlight_sql, conn, params=(SPOTLIGHT_SERVICES,))
 
 def _first_author(authors_val):
     """Best-effort first-author extraction from a WoS authors field."""
@@ -563,12 +547,6 @@ papers_df = pd.read_sql(papers_sql, conn, params=(list(VALID_SERVICES),))
 # Add the 4-family category derived from the whitelist mapping.
 papers_df["service_category"] = papers_df["ecosystem_service"].map(SERVICE_TO_CATEGORY)
 
-# Keep a copy WITH dataset_id for the Discovery steps below (§3 network +
-# framing charts must be legacy-only, same as everything else in this file).
-# The Explorer parquet itself stays unfiltered — dataset_id is dropped from
-# it via COLUMN_ORDER since Julian's explorer.py doesn't display it.
-_papers_df_with_dataset = papers_df.copy()
-
 # Separate, unfiltered decision_y for THIS step's own sanity check — STEP 6
 # intentionally reads ALL current data (Explorer), not just legacy, so it
 # must not be checked against the legacy-only `decision_y` from STEP 1.
@@ -669,9 +647,27 @@ TOP_N_DISCOVERY = 25
 # Legacy-only slice — the discipline network chart (§3) is narrative-facing
 # and must not shift when incremental papers are added, same rule as every
 # other narrative JSON in this file.
-_legacy_papers_df = _papers_df_with_dataset[
-    _papers_df_with_dataset["dataset_id"].isin(LEGACY_DATASET_IDS)
-]
+legacy_discovery_sql = """
+SELECT
+    p.wos_id,
+    COALESCE(
+        (SELECT STRING_AGG(pf.feature_val, ' | ' ORDER BY pf.feature_val)
+         FROM paper_features pf
+         WHERE pf.wos_id = p.wos_id
+           AND pf.feature_set = 'nlp_v1'
+           AND pf.feature_key = 'wos_category'
+           AND pf.is_current  = TRUE),
+        p.wos_categories
+    ) AS wos_categories_parsed,
+    c.category
+FROM papers p
+JOIN classifications_narrative_snapshot c ON p.wos_id = c.wos_id
+WHERE p.is_review = FALSE
+  AND c.decision = 'Y'
+  AND c.ecosystem_service = ANY(%s)
+"""
+_legacy_papers_df = pd.read_sql(legacy_discovery_sql, conn, params=(list(VALID_SERVICES),))
+
 
 # Parse each paper's wos_categories_parsed into a list of category names.
 def _split_wos(val):
@@ -737,7 +733,7 @@ discovery_out = {
     "cooccurrences": edges_out,
     "generated_at":  datetime.now(timezone.utc).isoformat(timespec="seconds"),
 }
-write_json(DISCOVERY_DIR / "wos_discovery.json", discovery_out)
+write_json(OUTPUT_DIR / "wos_discovery.json", discovery_out)
 
 # --- Human-readable summary to stdout ---
 print(f"\n── WoS discovery · top {TOP_N_DISCOVERY} categories ──")
@@ -1027,16 +1023,14 @@ def simple_stem(word):
 framing_sql = """
 SELECT p.wos_id, p.abstract, c.category
 FROM papers p
-JOIN classifications c ON p.wos_id = c.wos_id
+JOIN classifications_narrative_snapshot c ON p.wos_id = c.wos_id
 WHERE p.is_review = FALSE
-  AND p.dataset_id = ANY(%s)
-  AND c.is_current = TRUE
   AND c.decision = 'Y'
   AND c.category IN ('Replace', 'Support')
   AND p.abstract IS NOT NULL
   AND LENGTH(p.abstract) >= %s
 """
-fr_raw = pd.read_sql(framing_sql, conn, params=(LEGACY_DATASET_IDS, MIN_ABSTRACT_CHARS))
+fr_raw = pd.read_sql(framing_sql, conn, params=(MIN_ABSTRACT_CHARS,))
 n_replace = int((fr_raw["category"] == "Replace").sum())
 n_support = int((fr_raw["category"] == "Support").sum())
 print(f"\n── Framing discovery · Replace vs Support ──")
@@ -1118,7 +1112,7 @@ framing_disc = {
     },
     "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
 }
-write_json(DISCOVERY_DIR / "framing_discovery.json", framing_disc)
+write_json(OUTPUT_DIR / "framing_discovery.json", framing_disc)
 
 
 # ── Human-readable summary ──────────────────────────────────────
@@ -1164,7 +1158,7 @@ FRAMING_WORDS = [
 ]
 
 # Load discovery data and look up each curated word's stats by display name.
-with open(DISCOVERY_DIR / "framing_discovery.json", encoding="utf-8") as f:
+with open(OUTPUT_DIR / "framing_discovery.json", encoding="utf-8") as f:
     _framing_disc = json.load(f)
 
 _disc_lookup = {}
@@ -1213,24 +1207,10 @@ print(f"  Framing words: {len(framing_words_out)}/{len(FRAMING_WORDS)}")
 conn.close()
 elapsed = time.time() - t0
 print(f"\n✓ All files written to {OUTPUT_DIR.resolve()}/")
-_DASHBOARD_FILES = ["corpus_meta.json", "services_summary.json", "annual_by_category.json",
-                     "country_oa.json", "support_spotlight.json", "wos_cooccurrence.json",
-                     "framing.json", "papers_classified.parquet", "abstracts.parquet"]
-_DISCOVERY_FILES = ["wos_discovery.json", "framing_discovery.json"]
-
-for fname in _DASHBOARD_FILES:
+for fname in ("corpus_meta.json", "services_summary.json", "annual_by_category.json", "country_oa.json", "support_spotlight.json","wos_discovery.json", "wos_cooccurrence.json","framing_discovery.json", "framing.json", "papers_classified.parquet", "abstracts.parquet"):
     fpath = OUTPUT_DIR / fname
-    size = os.path.getsize(fpath) / 1024
+    size = os.path.getsize(fpath) / 1024 
     unit = "KB" if size < 1024 else "MB"
     val  = size if size < 1024 else size / 1024
     print(f"  {fname:32s} {val:>7.1f} {unit}")
-
-print(f"\n  discovery_data/ (reference material, not read by the dashboard):")
-for fname in _DISCOVERY_FILES:
-    fpath = DISCOVERY_DIR / fname
-    size = os.path.getsize(fpath) / 1024
-    unit = "KB" if size < 1024 else "MB"
-    val  = size if size < 1024 else size / 1024
-    print(f"    {fname:30s} {val:>7.1f} {unit}")
-
 print(f"\n  Total elapsed: {elapsed:.1f}s")
