@@ -30,7 +30,7 @@ flowchart TD
     C -->|medium / low confidence<br/>or API call fails| E[Sent to needs_review<br/>Google Sheet for a human to check]
     E -->|reviewer fills in the sheet| F["run_pipeline.py reviewed"<br/>run periodically]
     F --> D
-    D --> G[(PostgreSQL database<br/>on EC2, same instance as pipeline<br/>— not RDS)]
+    D --> G[(PostgreSQL database<br/>on EC2)]
     D --> H[text_analysis.py<br/>extracts country, institution,<br/>technology cluster, etc.]
     H --> G
     G --> I["aggregate.py<br/>weekly schedule"]
