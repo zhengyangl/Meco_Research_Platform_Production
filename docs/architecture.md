@@ -26,18 +26,22 @@ Three things were kept independent on purpose, so any one of them can change lat
 flowchart TD
     A[Researcher drops a new<br/>WoS export file into Google Drive] --> B["run_pipeline.py new-data"<br/>run manually or on a schedule]
     B --> C[classify.py<br/>Qwen-2.5-72B classifies each paper]
-    C -->|high confidence| D[Ingested automatically]
-    C -->|medium / low confidence| E[Sent to a Google Sheet<br/>for a human to check]
+    C -->|high confidence<br/>+ API call succeeds| D[ingest_incremental.py<br/>auto-ingest]
+    C -->|medium / low confidence<br/>or API call fails| E[Sent to needs_review<br/>Google Sheet for a human to check]
     E -->|reviewer fills in the sheet| F["run_pipeline.py reviewed"<br/>run periodically]
     F --> D
-    D --> G[(PostgreSQL database)]
+    D --> G[(PostgreSQL database<br/>on EC2, same instance as pipeline<br/>— not RDS)]
     D --> H[text_analysis.py<br/>extracts country, institution,<br/>technology cluster, etc.]
     H --> G
-    G --> I[aggregate.py<br/>runs on its own weekly schedule]
-    I --> J[dashboard_data/<br/>static JSON + Parquet]
-    J --> K[Narrative page — app.py<br/>always reads the static files]
+    G --> I["aggregate.py<br/>weekly schedule"]
+    I -->|"reads classifications_narrative_snapshot<br/>(frozen table) — numbers never change"| J1[Narrative JSON<br/>dashboard_data/]
+    I -->|"reads live full dataset, no dataset_id filter<br/>— content refreshes every week"| J2[papers_classified.parquet<br/>dashboard_data/]
+    J1 --> K[Narrative page — app.py<br/>always reads the static files]
     G -.live query.-> L[Data Explorer — explorer.py<br/>queries the database directly]
-    J -.fallback if DB is down.-> L
+    J2 -.fallback if DB is down<br/>serves last weekly snapshot.-> L
+    L -->|user flags a<br/>misclassification| M[Feedback Sheet<br/>separate from needs_review]
+    M -->|"review_status = Approved<br/>AND applied_to_db ≠ Yes"| N[sync_feedback.py<br/>periodic sync]
+    N --> G
 ```
 
 A few things worth noticing in this diagram before you read further:
