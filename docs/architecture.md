@@ -1,6 +1,6 @@
 # Architecture Overview
 
-*Last updated: August 2026*
+*Last updated: September 2026*
 
 This document explains how the MEco Research Data Platform is put together — what each piece does, why it's built this way, and how data moves from a raw Web of Science export to a number on the dashboard.
 
@@ -87,16 +87,19 @@ So the two dashboard pages behave differently on purpose:
 | What it shows | The original published corpus only (`dataset_id = 1`) | Everything currently in the database |
 | Updates when | Only when `aggregate.py` is deliberately re-run and the output files are redeployed | Every 15 minutes automatically (or on demand via a refresh button) |
 
-This is enforced in `aggregate.py` with a `LEGACY_DATASET_IDS` constant — every query that feeds the narrative page filters to that dataset. The Explorer's query has no such filter.
+This was originally enforced with a `LEGACY_DATASET_IDS` filter on `dataset_id` in every narrative-facing query — but that filter alone has a gap: it stops *new* papers from affecting the frozen numbers, but does nothing to stop an *existing* legacy paper's classification from being corrected later (via Chain B or the feedback sync described in 3.4 and Section 8), which would silently change the narrative page's numbers on the next weekly `aggregate.py` run.
 
-### 3.4 Two decoupled pipeline chains, not one
+To close that gap, `aggregate.py` now reads from `classifications_narrative_snapshot` — a table that holds a **frozen copy** of the original corpus's classification results, taken once and never updated. Every narrative-facing query joins against this snapshot table instead of the live `classifications` table, so a correction to any paper — legacy or not — is immediately visible in the Data Explorer (which still reads live `classifications`) without ever touching the numbers the narrative page has already published. See Section 5 for the table's schema. The Explorer's query has no such filter.
 
-Because of 3.2, `run_pipeline.py` can't wait for a human to finish reviewing before it "completes." So it's split into two independent commands:
+### 3.4 Independent, decoupled chains — not one pipeline
+
+Because of 3.2, `run_pipeline.py` can't wait for a human to finish reviewing before it "completes." More broadly, several parts of this system depend on a person acting somewhere first — a reviewer finishing a row in a spreadsheet, an approval on a crowd-sourced report — and an orchestrator should never block waiting on any one of them. So the pipeline is split into independent commands, each on its own schedule:
 
 - **`new-data`** — checks Google Drive for new files, classifies them, and ingests only the high-confidence rows. Run this whenever new files show up (manually, or on a schedule).
 - **`reviewed`** — checks the Google Sheet for rows a human has finished reviewing, and ingests those. Run this on its own schedule (e.g. daily), independent of whether new files have arrived.
+- **`feedback`** — checks the separate crowd-sourced Feedback Sheet (Section 8) for rows a person has marked `Approved`, and applies those corrections to the database. Independent of the `needs_review` queue above — a different sheet, a different reviewer action, its own schedule.
 
-`aggregate.py` (which regenerates the narrative JSON and the Explorer's fallback files) is decoupled from both — run it on its own weekly schedule. Its output doesn't need to be fresher than that; the narrative is frozen anyway, and the Explorer already queries the database live.
+`aggregate.py` (which regenerates the narrative JSON and the Explorer's fallback files) is decoupled from all three — run it on its own weekly schedule. Its output doesn't need to be fresher than that; the narrative is frozen anyway (now via `classifications_narrative_snapshot`, see 3.3), and the Explorer already queries the database live.
 
 ### 3.5 A local archive solves a metadata problem
 
@@ -114,7 +117,8 @@ For the person maintaining this day to day (not necessarily an engineer), here's
 2. **Run the new-data check.** Someone (or a cron job) runs `python run_pipeline.py new-data` on the server. It finds the new file, classifies every paper in it, and automatically saves the ones the model is confident about. Anything it's unsure about goes to a review spreadsheet.
 3. **Review the uncertain ones.** A person opens the Google Sheet, checks the flagged papers, and fills in a correction (or confirms the model was right).
 4. **Run the reviewed check.** Periodically (daily is reasonable), someone runs `python run_pipeline.py reviewed`. It picks up whatever's been finished in the sheet and saves it to the database.
-5. **Weekly refresh.** Once a week, `python run_pipeline.py aggregate` regenerates the narrative page's files and the Explorer's backup snapshot.
+5. **Sync approved feedback.** Periodically, someone runs `python run_pipeline.py feedback`. It picks up any crowd-sourced misclassification report that's been marked `Approved` in the Feedback Sheet and applies the correction to the database.
+6. **Weekly refresh.** Once a week, `python run_pipeline.py aggregate` regenerates the narrative page's files and the Explorer's backup snapshot.
 
 The Explorer itself needs no manual step — it queries the database directly and refreshes every 15 minutes on its own.
 
@@ -128,6 +132,7 @@ erDiagram
     papers ||--o{ classifications : "has versions of"
     papers ||--o{ paper_features : "has versions of"
     classifications ||--o{ classification_audit : "logged by"
+    papers ||--o| classifications_narrative_snapshot : "frozen copy (legacy corpus only)"
 
     datasets {
         int dataset_id PK
@@ -181,6 +186,16 @@ erDiagram
         float confidence
         uuid run_id
     }
+    classifications_narrative_snapshot {
+        text wos_id PK
+        char decision
+        text category
+        text ecosystem_service
+        text technology
+        text model_version
+        text prompt_version
+        timestamptz created_at
+    }
 ```
 
 What each table is for, in plain terms:
@@ -190,6 +205,7 @@ What each table is for, in plain terms:
 - **`classifications`** — the LLM's decision for each paper. Versioned: when a paper gets reclassified (e.g. after a model upgrade), the old row is marked `is_current = FALSE` instead of being deleted, and a new row is inserted. A unique index guarantees only one `is_current = TRUE` row exists per paper at a time.
 - **`paper_features`** — NLP-derived attributes (country, institution, technology cluster, etc.), same versioning pattern as `classifications`. `feature_set` groups features by which extraction method produced them (e.g. `'nlp_v1'`); `feature_key`/`feature_val` is a flexible key-value pair so new feature types don't need a schema change.
 - **`classification_audit`** — one row per LLM API call, storing exactly what the model said (`raw_output` as JSONB) and how confident it was. This is what makes a classification defensible later: if someone questions a result, you can look up exactly what the model saw and said. Note: this table does **not** store who reviewed a paper or when — that information lives only in the Google review sheet (see `handover.md`).
+- **`classifications_narrative_snapshot`** — a frozen, one-time copy of `classifications` for the original published corpus (`dataset_id = 1`), taken so the narrative page's numbers stay fixed no matter what happens to the live `classifications` table afterward. Never updated after creation; see Section 3.3 for why it exists.
 - **`pipeline_runs`** — one row per pipeline run (both the individual scripts and `run_pipeline.py`'s own summary rows), so a maintainer can see what ran, when, and how many papers were touched.
 
 ---
@@ -243,7 +259,9 @@ repo/
 │   ├── classify.py               # LLM classification with confidence routing
 │   ├── text_analysis.py          # NLP feature extraction → paper_features
 │   ├── aggregate.py              # Database → dashboard_data/ (weekly)
-│   └── run_pipeline.py           # Orchestrates new-data / reviewed / aggregate
+│   ├── sync_feedback.py          # Applies Approved corrections from the crowd-sourced
+│   │                              # Feedback Sheet (explorer.py's "Report a Misclassification")
+│   └── run_pipeline.py           # Orchestrates new-data / reviewed / feedback / aggregate
 ├── dashboard_data/                # Pre-computed JSON & Parquet, checked into git
 │   └── discovery_data/            # Reference material, not read by the dashboard
 ├── llm_validation/                # Model-selection notebooks (Task 0) — historical
@@ -252,7 +270,7 @@ repo/
 │   └── config.toml
 ├── .env.example
 ├── .gitignore
-├── schema.sql                      # ← NEW — one-time DB bootstrap (tested against a real Postgres 16 instance)
+├── schema.sql                      # one-time DB bootstrap (tested against a real Postgres 16 instance)
 ├── requirements.txt                 # Dashboard only, lightweight
 ├── requirements_pipeline.txt        # Pipeline + LLM + embedding libraries
 └── docs/
@@ -261,6 +279,6 @@ repo/
     ├── data_dictionary.md           
     ├── data_schema_supplement.md    
     ├── prompt_specification.md     
-    ├── environment_setup.md         # ← NEW — one-time setup (AWS, server, DB, OpenRouter, Google Cloud)
+    ├── environment_setup.md         # one-time setup (AWS, server, DB, OpenRouter, Google Cloud)
     └── handover.md                  # Day-to-day operation, troubleshooting, Google Sheets/Drive design notes
 ```
