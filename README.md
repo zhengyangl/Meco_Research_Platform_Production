@@ -60,7 +60,8 @@ This README is a map, not the full explanation. Start here, then go to whichever
 │   ├── data_schema_supplement.md
 │   ├── prompt_specification.md
 │   ├── environment_setup.md
-│   └── handover.md
+│   ├── handover.md
+│   └── How data flows through this platform.md
 ├── .streamlit/config.toml
 ├── .devcontainer/devcontainer.json
 ├── .env.example
