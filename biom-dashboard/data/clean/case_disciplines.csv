@@ -1,0 +1,421 @@
+case_id,discipline
+1,Automotive design
+1,Engineering
+1,Photography (UN Photographer)
+2,Engineering
+3,Civil engineers
+3,Mechanical engineers
+3,Marine biologist
+4,Health Science
+5,Physics
+5,Engineering
+6,Biologists (zoologists)
+6,Engineers
+6,Aerodynamicists
+6,Fluid dynamicists
+6,Material engineers and technicians
+6,CAD technicians
+7,Biology
+7,Chemistry
+8,Health Science
+8,Biotechnology
+9,Biology
+9,Marine Biology
+9,Engineering
+10,Health Sciences
+10,Marine Biotechnology
+10,Biomedicine
+11,Chemical Engineering
+11,Water Filtration
+11,Molecular Biology
+11,Organic Chemistry
+11,Mechatronics
+11,Plumming
+13,Biology
+13,Renewable Energy
+14,Materials science
+14,Neuroscience
+16,Animal acoustics
+16,Mathmatics
+16,Signal processing theory
+16,Design (acoustical transducers)
+16,Engineers
+17,Biology
+17,Engineering
+17,Wastewater treatment
+18,Engineering
+18,Physics
+19,Health Sciences
+20,Inventor
+20,Engineers (water treatment)
+20,Plant specialists (botanists)
+20,Research materials and fabrication specialists
+20,Scientists (specializing in biofilm technology)
+22,Bioengineering
+24,Molecular biologists
+24,Cell biologists
+24,Forensic Scientists
+24,Computer Modelers
+24,Synthetic chemists
+29,Ecology
+29,Evolutionary Biology
+29,Engineering
+30,Engineering
+30,Physics
+33,Fisheries
+33,Marine Biology
+36,Medical
+39,Inventor
+42,Syntehtic organic chemistry
+43,Engineering
+43,Computer Science
+47,Mechanical engineers
+47,Mathematician
+47,Chemical engineers
+47,Computational engineers
+49,Electrical engineering
+49,Computer engineering
+52,Opthalmology
+52,Chemical Engineering
+52,Chemistry
+55,Environmental engineers
+55,Building physicists
+55,Artists
+55,Architect
+55,Weather expert
+55,Facility management
+55,Engineers
+55,Construction
+58,Mechanical engineer
+58,Mycology
+58,Product design and innovation
+58,Biology
+61,Visual design
+61,Structural physics
+61,Carpentry
+63,Electrochemists
+63,Synthetic chemists
+63,Chemical engineers
+63,Product engineers
+63,Electrical engineers
+68,Technical innovators and engineers
+75,Mechanical engineers
+75,Chemical engineers
+75,Chemists
+75,Biologists
+75,Clinicians
+78,Ceramacist
+78,Physical chemist
+78,Polymer chemist
+78,Chemical engineers
+80,Materials science
+80,Mechanical engineer
+80,Systems engineer
+84,Biology
+84,Polymer science
+85,Mechanical engineer
+85,Chemical engineer
+85,Biomolecular engineering
+90,Mechanical engineers
+90,Materials engineer
+90,Industrial desingers
+90,Manufacturing specialists
+93,Visual design
+93,Pscychology
+93,Software development
+96,N/A
+101,Biophysicists
+101,Engineers
+114,Chemicial engineers
+114,Chemists
+115,Biomedical Engineering
+115,Chemical Engineering
+118,Fabric technologists
+123,Glass technicians
+123,Coating specialists
+123,Ornithologists
+125,Fluid dynamics
+125,Mechanical engineers
+125,Computer scientists
+125,Computer modelling
+125,"Sales, service, manufacturing"
+126,Medical doctor
+126,Design consultants
+126,Thermoplastic manufacturers
+126,Test houses
+126,Universities
+128,Construction engineers
+134,Mechanical engineers
+134,Chemical engineers
+134,Aeronautical engineers
+136,Chemistry
+136,Physics
+136,Mechanical engineers
+136,Electrical engineers
+143,Architecture
+145,Biologists (botanists)
+145,Chemists (material development and analysis)
+145,Material engineers
+145,Chemical engineers (specialized in computer aided modelling of materials)
+146,Architecture
+147,Paint engineers
+147,Chemists
+147,Mechanical engineers
+148,Materials science
+148,Materials engineering
+148,Microbiology
+160,Structural engineer
+160,Architect
+160,Bioinfomatics
+169,Mechanical engineer
+169,Industrial design
+169,Modelmaking/prototyping
+172,Mechnical engineer
+172,Designers
+172,Geologist
+172,Computer aided engineers
+173,Designers
+173,Aerospace engineers
+173,Mechanical engineers
+174,Geneticists
+174,Ecosystem ecologists
+174,Community ecologists
+174,Population ecologists
+174,Plant breeders
+174,Soil microbial ecologists
+174,Agroecologists
+174,Plant pathologists
+185,Engineering
+185,Computer science
+185,Physics
+185,Chemistry
+185,Biology
+185,Art
+185,Craftsman
+185,Design
+187,Engineers
+187,Biologist
+188,Botanist
+188,Physics
+188,Engineers
+216,IT Project Managers
+216,Practitioners in Health and Entertainment
+217,IT Project Managers
+217,Practitioners in Health and Entertainment
+218,IT Project Managers
+218,Practitioners in Health and Entertainment
+222,Operations research and information engineers
+224,Psychologist
+224,Production engineer
+224,Robot designer
+224,Computer science
+232,Designer
+233,Industrial design
+234,Aviation technician
+234,Electronic engineer
+241,Mechanical Engineer
+241,Chemistry Research
+257,Architecture
+266,Electrical Engineer
+267,Product design
+267,Art
+267,Autommization engineering
+273,Mechanical engineers
+273,Ethologists
+282,Photochemists
+282,Organic chemists
+282,Biochemists
+282,Physical chemists
+282,Inorganic chemists
+290,Structural engineers
+290,Light designers
+290,Special façade engineers
+290,Landscape architects
+290,Kinematic engineers
+290,Architects
+292,Biologist
+292,Physicists
+292,Mathematicians
+292,Roboticists
+292,Engineers
+292,Tribologists
+293,Architecture
+293,Computational Design
+293,Cabinet makers
+293,Structural engineers
+293,Biologists (Plant Biomechanics)
+314,Roboticists
+314,Engineers
+314,Mathematicians
+314,Biologists
+314,Neuroscientists
+315,Mechanical engineering
+315,Material science
+320,Mechanical engineers
+320,Chemical engineers
+320,Aeronautical engineers
+348,Physicist
+348,Computer scientist
+348,Biomechatronis
+351,Biomechanics
+351,Nerobiologists
+351,Mechanical engineer
+351,Electrical engineer
+354,Mechanical engineers
+354,Electrical engineers
+354,Industrial engineers
+360,Biology Materials Science
+361,Biology Engineering Robotics
+362,N/A
+363,Biology Engineering Marine science
+364,Biology Mechanical Engineering Agriculture
+365,Civil engineering
+366,Biology Engineering Thermodynamics
+367,Biology Architecture Environmental science
+368,Biology Engineering Robotics
+369,Mechanical engineering
+369,Mechanical design
+369,Fabrication
+369,Electronics
+369,Programming
+370,Biology Materials Science Chemistry
+371,N/A
+372,N/A
+373,Biology Engineering Aeronautics
+374,Biology Engineering Marine science
+375,Biology Materials Science Nanotechnology
+376,N/A
+377,Biology Engineering
+378,N/A
+379,Biology Architecture Engineering
+380,N/A
+381,N/A
+382,Biology Marine Engineering
+383,Health Science Biotechnology
+384,Biology Marine Biology Engineering
+385,Health Sciences Marine Biotechnology Biomedicine
+386,Chemical Engineering Water Filtration Molecular Biology Organic Chemistry
+387,Sensors Micro actuators Thermal chemical and electromagnetic sensing
+388,Solar energy Hydrogen fuel Light harvesting
+389,Materials science Neuroscience
+391,Biology Engineering Wastewater treatment
+392,Engineering Physics
+393,Biology Chemistry
+394,Inventors Engineers water treatment Plant specialists botanists
+395,Biology Materials science Mechanical Engineering
+396,Bioengineering
+397,Molecular biologists Cell biologists Forensic Scientists Synthetic chemists
+398,Biology Medicine Mechanical Engineering
+399,Health Science Biotechnology
+400,Health Science Biotechnology
+401,Biology Mechanical Engineering
+402,Physics Engineering
+403,Biology Chemistry
+404,Biology Medicine
+405,Biology Mechanical Engineering
+406,Biology Mechanical Engineering
+407,Biology Engineering
+408,Biology Engineering Physics
+409,Biology Mechanical Engineering
+410,Biology Materials science
+411,Biology Materials science
+412,Biology Materials science
+413,Biology Engineering
+414,Biology Chemistry
+415,Health Science Materials science
+416,Biology Engineering
+417,Biology Materials science
+418,Biology Chemistry
+419,Biology Materials science Engineering
+420,Biology Mechanical Engineering
+421,Biology Chemistry Materials science
+422,Biology Engineering
+423,Biology Engineering
+424,Biology Engineering Physics
+425,Biology Engineering
+426,Biology Materials science
+427,Biology Engineering
+428,Biology Materials science
+429,Biology Materials science
+430,Biology Mechanical Engineering Medicine
+431,Biology Materials science
+432,Biology Engineering
+433,Biology; Ecology; Soil Science; Environmental Science
+434,Health Sciences
+435,Biology Chemistry
+436,Health Sciences
+437,Health Sciences
+438,Health Sciences
+439,Biology Materials
+440,Health Sciences
+441,Health Sciences
+442,Biology Materials
+443,Health Sciences
+444,Biology Engineering
+445,Health Sciences
+446,Biology Chemistry
+447,Biology to Biology
+448,Health Sciences
+449,Biology Engineering
+450,Health Sciences
+451,Health Sciences
+452,Biology Chemistry
+453,Biology Chemistry
+454,Biology Chemistry
+455,Biology Chemistry
+456,Biology Chemistry
+457,Biology Chemistry
+458,Biology Chemistry
+459,Biology Chemistry
+460,Health Sciences
+461,Biology Engineering
+462,Biology Materials
+463,Biology Chemistry
+464,Biology Chemistry
+465,Biology Chemistry
+466,Biology Chemistry
+467,Biology Chemistry
+468,Biology Chemistry
+469,Health Sciences
+470,Biology Engineering
+471,Biology Materials
+472,Biology Chemistry
+473,Biology Engineering
+474,Health Sciences
+475,Biology to Biology
+476,Health Sciences
+477,Health Sciences
+478,Biology Engineering
+479,Biology Materials
+480,Biology Engineering
+481,Biology Engineering
+482,Biology Materials
+483,Biology Chemistry
+484,Biology Engineering
+485,Biology Engineering
+486,Biology to Biology
+487,Biology Chemistry
+488,Health Sciences
+489,Health Sciences
+490,Health Sciences
+491,Biology Materials
+492,Biology Engineering
+493,Biology Engineering
+494,Biology Engineering
+495,Biology Materials
+496,Biology Chemistry
+497,Biology Engineering
+498,Health Sciences
+499,Biology Materials
+500,Biology Engineering
+501,Biology Materials
+502,Biology Chemistry
+503,Biology Chemistry
+504,Health Sciences
+505,Biology Chemistry
+506,Biology Engineering
+507,Biology Engineering
+508,Health Sciences
+509,Biology Engineering
+510,Health Sciences
+511,Biology Engineering

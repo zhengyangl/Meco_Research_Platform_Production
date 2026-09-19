@@ -1,0 +1,943 @@
+case_id,keyword,keyword_type
+1,Transport,product
+1,Disaster relief,product
+2,Coating,product
+2,Reducing drag,product
+2,Air-retaining surface,product
+2,Micropatterns,product
+2,Microfabrication,product
+3,Water purification,product
+3,Algae,product
+3,Water treatment,product
+4,Anti-microbial,product
+4,Filter,product
+5,Power generation,product
+5,Wave power,product
+6,Fluid dynamics,product
+6,Wind power,product
+7,Biofuels,product
+7,Bioelectrocatalysis,product
+8,Biosensor,product
+8,Protection,product
+8,Biomolecules,product
+9,Anti-biofouling,product
+9,Underwater,product
+9,Skin material,product
+10,Antibiotic,product
+10,Synthesis,product
+10,Pharmaceutical molecules,product
+10,Enterocin,product
+11,Water filtration,product
+11,Membranes,product
+11,Aquaporins,product
+12,Sensors,product
+12,Micro actuators,product
+12,"Thermal, chemical and electromagnetic sensing",product
+13,Solar energy,product
+13,Hydrogen fuel,product
+13,Light harvesting,product
+14,Wound treatment,product
+14,Bone growth,product
+14,Peptide amphiphile,product
+15,Molecular nano-wires,product
+15,Information transfer and storage,product
+15,Molecular chain formation,product
+16,Acoustic capabilities,product
+16,Imaging physical properties,product
+17,Self-cleaning water filter,product
+17,Wastewater treatment,product
+18,Seabed mooring system,product
+19,Quorum sensing inhibitors,product
+19,Biofilm,product
+19,Antibiotics,product
+20,Water filtration,product
+20,Native plants,product
+20,Wetlands,product
+20,Nutrients,product
+20,Biofilms,product
+21,Adhesive surface,product
+21,Hairy surface,product
+21,Insect tape,product
+21,Setae,product
+21,Reusable,product
+22,Water-based synthetic adhesive,product
+22,Bioadhesive,product
+22,Biocompatible,product
+22,Biodegradable,product
+23,Water filtration,product
+23,Biolytic,product
+23,Humus,product
+24,Stabilise/store biological samples,product
+25,Artery stent,product
+26,Robotic assistant,product
+26,Robotic arm,product
+26,Flexibility and compliance,product
+27,E. coli detection,product
+27,Biosensing,product
+27,Colorimetric detection,product
+28,Biosensor,product
+28,Multiple receptors,product
+29,Power input and force output,product
+29,Robotic bat wing,product
+30,Propulsion system,product
+30,Thunniform swimming,product
+30,Renewable energy,product
+31,Biosynthesis,product
+31,Cyclic siloxanes,product
+32,Hydroxyapatite nanocrystals,product
+32,Polymer,product
+32,Bone mimetic substance,product
+32,Biocompatible,product
+33,Bubble-net system,product
+33,Net-less technology,product
+33,Fishing,product
+34,Nanophotonics,product
+34,Butterfly colour,product
+34,Nanofabrication,product
+35,Solar cell,product
+35,Light absorption,product
+36,Medicine,product
+36,Glucose control,product
+36,Exendin-3 and exendin-4 polypeptides,product
+36,Pharmaceutical,product
+37,Carbon-capturing aggregate production,product
+37,Cement production,product
+37,Converting gas to minerals,product
+38,Lightweighting,product
+38,Cars,product
+38,Software,product
+39,Sustainable energy,product
+39,Capillary tubes,product
+39,Water,product
+40,Carbon nanotube yarn,product
+41,Carbon sequestering cement,product
+41,Magnesia,product
+41,Porous microscopic architecture,product
+42,Chemical synthesis technique,product
+42,Ladder molecule,product
+42,Water-based,product
+42,Pharmaceuticals,product
+43,Computing processors,product
+43,Supercomputers,product
+43,Brain,product
+43,AI decision making,product
+43,"Memory, recognition and parallel processing",product
+44,Colour-shifting paint,product
+44,Thin-film technology,product
+45,Biofluid,product
+45,Solar heating,product
+46,Fractal pattern,product
+46,Branches and leaves,product
+46,Cooling,product
+47,Solar power array,product
+47,Optimal arrangement of mirrors,product
+47,Fibonacci sequence,product
+48,Water collection and storage,product
+48,Harvesting water from air,product
+48,Condensation,product
+49,Antenna,product
+49,Electromagnetic wave,product
+49,Small directional antennas,product
+50,Distributed computing algorithm,product
+50,Maximal independent set,product
+50,Sensory organ precursor,product
+50,Algorithm,product
+51,Reconfiguring space with minimal impact,product
+51,Adaptable/flexible system,product
+51,Housing,product
+52,Opthalmological implant,product
+52,Artificial cornea,product
+53,Strength-to-weight ratio,product
+53,Honeycomb composite,product
+53,Stiff thin sheets,product
+54,Dye-sensitized solar cells and panels,product
+54,Artificial photosynthesis,product
+55,Energy saving,product
+55,Passive heating and cooling,product
+55,Building,product
+56,Anti-fouling,product
+56,Boat hulls,product
+56,Biofilm,product
+57,Wastewater treatment,product
+57,Aquatic ecosystem,product
+58,Compostable and biodegradable packaging,product
+58,Mushrooms,product
+58,Resin,product
+59,Water-splitting,product
+59,Hydrogen generation,product
+60,Medical and robotic sensor,product
+60,Pressure sensor,product
+61,Rainwater collection,product
+61,Leaf shape,product
+61,Low environmental impact of construction materials,product
+62,Nanostructures,product
+62,Scintillator light absorption,product
+62,X-ray imaging,product
+63,Biofuel cells,product
+63,Micellar polymer,product
+63,Enzymes,product
+63,Catalytic efficiency,product
+64,Adaptive,product
+64,Sensory building skins,product
+64,Multiscalar architectures,product
+64,Algorithms,product
+65,Underwater sensor,product
+65,Signal structure,product
+65,Signal processing,product
+66,Reduce drag,product
+66,Dermal denticles,product
+66,Turbulators,product
+66,Vehicle covering,product
+67,Axial fan,product
+67,Efficient and quiet,product
+68,Showerhead,product
+68,Spiral pattern,product
+68,Low-flow,product
+69,Wind farm,product
+69,Spatial design,product
+69,Vortices,product
+69,Energy transfer,product
+70,Surfboards,product
+70,Increasing lift,product
+70,Decreasing drag,product
+71,Hydrophilic bumps and hydrophobic troughs,product
+71,Water collection from fog,product
+72,Fog-harvesting,product
+72,Mesh,product
+72,Water collection,product
+73,Wood fiber adhesion,product
+73,Marine adhesive proteins,product
+74,Wet/dry adhesive,product
+75,Bandage,product
+75,Wet/dry adhesion,product
+76,Non-toxic carbon nanotubes,product
+76,Glycopolymer,product
+76,Drug delivery vector,product
+76,Mucin,product
+77,Shoes,product
+77,Hiking,product
+78,Self-cleaning surface,product
+78,Oil resistance,product
+78,Fire retardation,product
+78,Antimicrobial,product
+78,Fabric finish,product
+79,Plant incubator,product
+79,Seedling,product
+79,Horticulture,product
+80,Heliotropism,product
+80,Solar energy,product
+80,Moving solar panels,product
+81,Building façade,product
+81,Response to light/shade,product
+82,Solar energy harvesting,product
+82,UVB harvesting,product
+82,Xanthopterin,product
+82,Dye-sensitized cell,product
+83,Radiant heater,product
+83,Spot heater,product
+83,Compound lens,product
+84,Contractile silk fibers,product
+84,Humidity responsive materials,product
+84,Muscles,product
+85,Humidity sensor,product
+85,Colour change,product
+85,Porous nanostructure,product
+86,Hydrophobic coating,product
+86,Patterned surface,product
+86,Water repellant,product
+87,Tile flooring,product
+87,Random pattern,product
+88,Exterior surface coating,product
+88,Self-cleaning,product
+89,Insect repellant,product
+89,Tomato lipid,product
+89,IBI-246,product
+90,Locking components,product
+90,Making joints,product
+91,Industrial symbiosis,product
+91,Cooperation,product
+92,Heparin synthesis,product
+92,Golgi apparatus,product
+92,Pharmaceuticals,product
+93,Psychological tool,product
+93,Decision making,product
+93,Software,product
+94,Automotive collision-avoidance system,product
+94,Sensory processing,product
+95,Roof tile,product
+95,Self-cleaning,product
+96,Exterior coating,product
+96,Paint,product
+96,Water and dirt repellant,product
+97,Swimming aid,product
+97,Monofin,product
+98,Adaptive composite materials,product
+98,Dynamic mechanical polymer nanocomposites,product
+98,Reversible changes in mechanical properties,product
+99,Medical implant coating,product
+99,Adhesive,product
+100,Bio-battery,product
+100,Electricity conversion,product
+101,Spider silk,product
+101,Fiber production,product
+101,Microfluidic device,product
+102,Shock absorption,product
+102,Microelectromechanical systems (MEMS),product
+103,Self-cleaning coating,product
+103,Textiles,product
+104,Microelectronics cooling,product
+104,Superhydrophobicity,product
+104,Condensers,product
+104,Synthetic surface,product
+105,Electronic display screen,product
+105,Light reflecting structures,product
+106,Micro-rotorcraft,product
+106,Monowing,product
+106,Stable autorotation,product
+107,Fiber structure,product
+107,Textile,product
+107,Structural colour,product
+108,Less painful injection,product
+108,Microneedle,product
+108,Medical injection device,product
+109,Anti-reflective coating,product
+109,Acrylic resin,product
+110,Anti-reflective coating,product
+110,Anti-glare coating,product
+111,Peer-to-peer file sharing,product
+111,Adaptive network,product
+111,Routing path between nodeds on the network,product
+112,Structural colouration,product
+112,Anti-counterfeiting technology,product
+113,Nano-structures,product
+113,Fabricating nano- to microscale structures,product
+113,Biosilica,product
+114,Biopolymer,product
+114,Polyaspartate,product
+114,Inhibition of calcium carbonate,product
+115,Lipid bilayer,product
+115,Nanopore,product
+116,Fabric finish,product
+116,Textiles,product
+116,Self-cleaning,product
+116,Water and dirt repellant,product
+117,Coil spring,product
+117,Tunable auto-adaptive response,product
+118,Waterproof clothing,product
+118,Microfibre,product
+118,Asymmetric filaments,product
+119,Polycarbonates,product
+119,Catalyst,product
+119,Carbon dioxide,product
+120,Underwater microphone,product
+120,Broad frequency detection,product
+121,Displays,product
+121,Patterned materials,product
+121,Sensors,product
+122,Artificial organ,product
+122,Combining cells with circuitry,product
+123,Glass,product
+123,Bird collisions,product
+123,UV-reflective coating,product
+124,Backpack,product
+124,Durability,product
+124,Protective,product
+125,Efficient water mixing,product
+125,Vortical/spiral flows,product
+126,Headgear,product
+126,Head protection,product
+126,Outer polymer membrane,product
+127,Material for plugging leaks,product
+127,Water and oil pipelines,product
+128,Building materials,product
+128,Architecture,product
+128,Replacable building blocks,product
+129,Heat retention,product
+129,Thermos insulator,product
+130,Strong,product
+130,Transparent composite,product
+130,Layer-by-layer synthesis mechanism,product
+131,Batteries,product
+131,Cellulose,product
+131,Conducting polymer,product
+132,Wastewater treatment,product
+132,Aquatic ecosystem,product
+132,Bacterial biofilm,product
+133,Organic photovoltaic technology,product
+133,Dye-sensitized solar cells,product
+134,Thermally-tinted glass,product
+134,Walls,product
+134,Windows,product
+135,Wireless energy controllers,product
+135,Swarm logic,product
+135,Algorithm,product
+136,Electronically-stimulated tinted glass,product
+136,Windows,product
+137,Laser,product
+137,Colour,product
+137,Nanoscale structures,product
+138,Self-cleaning fabric,product
+138,Superhydrophobicity,product
+139,Self-cleaning coating,product
+139,Superhydrophobicity,product
+140,Self-cleaning coating,product
+140,Superhydrophobicity,product
+141,Autonomous,product
+141,Adaptive,product
+141,Healing,product
+141,Material,product
+142,Self-healing,product
+142,Polymer membrane,product
+142,Material,product
+143,Self-healing,product
+143,Concrete,product
+144,Self-heaing,product
+144,Concrete,product
+144,Engineered cementitious composites,product
+145,Self-repairing,product
+145,Plastic,product
+145,Autonomous repair,product
+146,Self-repairing,product
+146,Polymer composites,product
+146,Repair chemicals,product
+147,Drag reduction,product
+147,Paint,product
+147,Friction reduction,product
+148,Anti-microbial,product
+148,Non-toxic,product
+149,High speed train,product
+149,Noise reduction,product
+150,Composite material,product
+150,Insect cuticle,product
+151,Tunnel boring,product
+151,Machine,product
+151,Tunnelling shield,product
+152,Hydrophobic,product
+152,Oleophobic coating,product
+153,Medical bandage,product
+153,Antibacterial,product
+153,Healing,product
+154,Hybrid energy system,product
+154,Wind energy,product
+154,Solar energy,product
+154,Design to Biology,product
+154,Vertical solar panels,product
+155,Bioelectricity,product
+155,Bulldozing,product
+155,Moving through soil,product
+156,Tree,product
+156,Solar energy,product
+156,Wind energy,product
+157,Solar panels,product
+157,Boats,product
+157,Wind energy,product
+158,Solar-driven still and pump,product
+158,Water purification,product
+159,Stabilization of vaccines,product
+159,Biological material storage,product
+160,Building materials,product
+160,Architecture,product
+160,Earthquake resistance,product
+161,Hydroelectric turbine,product
+161,Energy,product
+162,Passive solar photovoltaic (PV) tracker,product
+162,Solar energy,product
+163,Protein,product
+163,Glue,product
+163,FbaB protein,product
+163,Amide bond formation,product
+164,Polymer,product
+164,Strength,product
+164,Elasticity,product
+164,Self-healing,product
+164,Shape-memory,product
+165,Antiseptic surface treatment,product
+165,Antimicrobial peptides,product
+165,Peptoids,product
+166,Flagella,product
+166,Propulsion,product
+166,Helical movement,product
+167,Surgical glue,product
+167,Adhesive,product
+167,Elastin,product
+167,Polymer,product
+169,Ceiling fan,product
+169,Single blade fan,product
+170,Artificial cornea,product
+170,Collagen,product
+170,Eye,product
+171,Solar energy,product
+171,Storage,product
+171,Photocatalysis,product
+172,Wave energy turbine,product
+172,Hydro power,product
+173,Vehicle,product
+173,Electric scooter,product
+173,Flexible body,product
+174,Prairie,product
+174,Perennial grain cropping,product
+174,Permaculture,product
+175,Mattress,product
+175,Bedding,product
+175,Honeycomb,product
+176,Cement,product
+176,Photocatalyst,product
+176,Decomposing air pollutants,product
+177,Ultra-hard material,product
+177,Beta-amyloid proteins,product
+177,Nanotubes,product
+178,Building,product
+178,Passive ventilation,product
+178,Resource efficiency,product
+179,Microfluidic scaffold,product
+179,Wound healing,product
+179,Vascular system,product
+180,Vertical farming,product
+181,Wind energy,product
+181,Vibration energy,product
+182,Virus,product
+182,Self-assembly,product
+182,Batteries,product
+183,Bottle,product
+183,Spiral growth,product
+183,Helical structures,product
+183,Lightweight,product
+184,Anhydrobiosis,product
+184,Vaccine stabilization,product
+184,Storage,product
+185,Vortex,product
+185,Water treatment,product
+186,Recycling waste,product
+187,Air-retaining surface,product
+187,Coating,product
+188,Self-cleaning,product
+188,Coating,product
+189,Edible packaging,product
+189,Gelatinous casing,product
+189,Food,product
+190,Closed-loop system,product
+190,Waste reduction,product
+190,Beer brewing,product
+191,Closed-loop system,product
+191,Waste reduction,product
+191,Coffee farming,product
+192,Synthesis of peptides and nucleotides,product
+192,Chemical assembly line,product
+192,Pharmaceuticals,product
+193,Spray mechanism,product
+193,Vapor explosions,product
+193,Fuel injection system,product
+194,Networks,product
+194,Redundancy,product
+194,Loops,product
+195,Anti-virus software,product
+195,Swarm behaviour,product
+196,Dynamic materials,product
+196,Adaptive,product
+196,Anti-bacterial,product
+196,Adhesive,product
+196,Hydrophobic,product
+197,Dynamic materials,product
+197,Composite surface,product
+198,Water-repellant surfaces,product
+198,Dynamic materials,product
+199,Underwater dynamic surface,product
+199,Cilia,product
+199,Microfins,product
+199,pH-responsive,product
+200,Nanofiber assembly,product
+200,Self-assembling,product
+200,Helical pattern,product
+200,Hierarchical order,product
+202,Spicules,product
+202,Glass strength,product
+202,Scaffold strength,product
+203,Liquid repellance,product
+203,Hydrophobicity,product
+203,Biofilm,product
+204,Microlens,product
+204,Dynamic modulation of light transmission,product
+205,Self-cleaning,product
+205,Material,product
+205,Lunar equipment,product
+206,Photoanode,product
+206,Dye-sensitized solar cell,product
+207,Sticky/release tape,product
+207,Adhesive,product
+208,Photosynthesis,product
+208,Chemical engineering,product
+208,Light absorption,product
+209,Medical sensor,product
+209,Oxygen sensor,product
+209,Colour change,product
+209,Silk,product
+210,Ceramics,product
+210,Nacre-like materials,product
+211,Robot,product
+211,Dry adhesion,product
+211,Space exploration,product
+212,Artificial antibodies,product
+212,Biosensor,product
+212,Polymers,product
+213,Water-repellant surfaces,product
+213,Metal surface,product
+214,Collision avoidance,product
+214,Automobile,product
+214,Detection of obstacles,product
+215,Adhesion,product
+215,Nanotubes,product
+215,Resuable and self-cleaning adhesive,product
+216,Management strategy,product
+216,Communication,product
+216,Group efficiency,product
+217,Management strategy,product
+217,Communication,product
+217,Group efficiency,product
+218,Management strategy,product
+218,Communication,product
+218,Group efficiency,product
+219,Light diffraction,product
+219,Nanostructure,product
+220,Pharmaceutica,product
+220,Antibiotic drug,product
+220,Host defense proteins,product
+221,Robot,product
+221,Fish,product
+221,Fast swimming,product
+222,Software,product
+222,Swarm intelligence,product
+222,Theoretical problem-solving,product
+223,Software,product
+223,Swarm intelligence,product
+224,Telecommunications,product
+224,Swarm intelligence,product
+225,Data analysis,product
+225,Clustering,product
+226,Adhesion,product
+227,Propulsion system,product
+230,Water-jumping microrobot,product
+230,Numerical model,product
+230,Superhydrophobicity,product
+237,Medical tape,product
+237,Microneedle,product
+237,Sutures,product
+237,Staples,product
+243,Firefly light organ,product
+243,Antireflective structures,product
+243,Nanostructure on lens,product
+243,Light-emitting diode,product
+248,Amphibious salamander robots,product
+248,Legged locomotion,product
+248,Mobile robots,product
+248,Robot kinematics,product
+256,Soft robotics,product
+256,Earthworm robot,product
+256,Nickel titanium (NiTi),product
+256,Coil spring,product
+256,Peristaltic locomotion,product
+256,Shape memory alloy (SMA) actuation,product
+258,Divisions,product
+258,Products,product
+258,Tires,product
+258,Passenger and light truck tires,product
+258,Car,product
+258,Continental,product
+258,Summer,product
+266,Associator,product
+301,Squid sucker,product
+301,Sucking force,product
+301,Artificial sucker,product
+302,Materials for devices,product
+302,Engineering,product
+302,Optics and photonics,product
+312,Animal locomotion,product
+312,Extended phenotype,product
+312,Locomotion control,product
+312,Social insect,product
+312,Stability,product
+313,Bioinspired robots,product
+313,Wide-angled vision,product
+313,Optic flow sensor,product
+313,Micro-optp-electromechanical systems,product
+320,Thermally-tinted glass,product
+320,Walls,product
+320,Windows,product
+331,Underwater propulsor,product
+331,Bluespotted ray,product
+331,Undulatory fin,product
+331,Fish robot,product
+340,Penguin,product
+340,Underwater autonomous vehicle,product
+342,Locust,product
+342,Jumping mechanism,product
+342,Passive tibia extensor muscle,product
+348,Self-stabilizing quadruped locomotion,product
+348,Robotic leg design,product
+351,Rolling locomotion,product
+351,Robotics,product
+351,Catepillar,product
+355,Artificial photosynthesis,product
+355,Clean energy,product
+355,"Energy, nanoscience",product
+355,Nanotechnology,product
+355,Solar energy,product
+357,Jumping robots,product
+357,Fleas,product
+357,Catapult,product
+358,Flying insects,product
+358,Swallotail butterfly,product
+358,Aerodynamics,product
+359,Fish,product
+359,Undulating movement,product
+359,Airship,product
+359,Dielectric elastomers,product
+360,Biological Fibres,product
+360,Textiles,product
+360,Hagfish,product
+360,Draw-processed,product
+361,Bionic assymmetry,product
+361,Undulating fins,product
+361,Undulating propulsion,product
+364,Stubble-cutting disc,product
+364,Mole rat,product
+364,Claw toe,product
+364,Finite element analysis,product
+368,Tactile sensors,product
+368,Mobile robots,product
+368,Optimal path,product
+370,Surface and thin films,product
+370,Porous materials,product
+370,Nanoscale materials,product
+433,soil fauna; ecosystem functions; Latin America; decomposition; nutrient cycling; soil biodiversity; systematic review,product
+1,N/A,patent
+3,Algal turf,patent
+3,Scrubber,patent
+3,Nutrients,patent
+3,Pollutants,patent
+3,Water surge action,patent
+4,Virus-removing filter,patent
+4,Virus-capturing,patent
+4,Sialic acid,patent
+5,Wave energy capture,patent
+5,Ocean energy,patent
+5,Electricity generation,patent
+6,Scalloped wing,patent
+6,Lift,patent
+6,Drag,patent
+8,Entrapped binding protien,patent
+8,Biosensor,patent
+8,Mutated binding protein,patent
+9,Marine bio-fouling,patent
+9,Underwater structures,patent
+9,Pilot whale,patent
+11,Biomimetic membranes,patent
+11,Water production,patent
+11,Biological membranes,patent
+14,Self-assembling peptide amphiphiles,patent
+14,Growth factor delivery,patent
+14,Binding interaction,patent
+17,Filter,patent
+17,Counter-flow clearing,patent
+18,Mooring,patent
+18,Attachment to seabed,patent
+19,Quorum sensing inhibitor,patent
+19,Bacterial desease control,patent
+19,Agriculture,patent
+19,Horticulture,patent
+20,Floating island,patent
+20,Carpet fibre matrix,patent
+22,N/A,patent
+23,Biolytic filtration,patent
+23,Filtration bed support,patent
+23,3D humus matrix lattice,patent
+24,Sample management and storage,patent
+24,Drying and rehydrating biological samples,patent
+25,Helical stent,patent
+25,Fluid conduit insertion,patent
+27,Polymeric assay film,patent
+27,Colorimetric detection,patent
+27,Lipid bilayer,patent
+30,Capturing energy,patent
+30,Fluid flow,patent
+30,Lift generating,patent
+30,Oscillatory motion,patent
+31,Biosynthesis,patent
+31,Cyclic siloxanes,patent
+31,Aquatic sponge (Tethya aurantia),patent
+32,Biomimetic nanocomposite,patent
+33,Bubble wall,patent
+33,Fishing system,patent
+36,Exendin-3 and exendin-4 polypeptides,patent
+36,Diabetes mellitus treatment,patent
+36,Hyperglycemia prevention,patent
+39,N/A,patent
+41,Reactive magnesium oxide,patent
+41,Hydraulic cement,patent
+42,N/A,patent
+44,High chroma,patent
+44,Color-shifting glitter,patent
+44,Optically variable,patent
+44,Interference structure coating,patent
+47,N/A,patent
+52,Artificial corneal implant,patent
+52,Double network hydrogel,patent
+52,Biocompatible polymers,patent
+55,N/A,patent
+56,Bio-supportive medium,patent
+56,Bio-supportive matrices,patent
+56,Biological barrier,patent
+58,Fugal cell wall production,patent
+58,Raw textile resource,patent
+58,Renewable,patent
+58,Grown materials,patent
+59,Electrocatalytic evolution,patent
+59,Uptake of water,patent
+59,Electrodes,patent
+59,Fuel cells,patent
+59,Electrolysers,patent
+61,N/A,patent
+63,Electron transfer,patent
+63,Bioanodes,patent
+63,Biocathodes,patent
+63,Biofuel cells,patent
+65,Digital information transfer,patent
+66,Drag-reducing vehicle surface,patent
+66,Hydrodynamic drag reduction,patent
+66,Aerodynamic drag reduction,patent
+73,Formaldehyde-free,patent
+73,Lignocellulosic adhesive,patent
+73,Soy proteins,patent
+74,Modular adhesive,patent
+74,Nano-scale adhesive,patent
+75,Adhesive,patent
+75,Biological tissue,patent
+75,Wet adhesion,patent
+76,Interfacing nanostructures,patent
+76,Biological cells,patent
+78,Stain and soil resistant,patent
+78,Textile,patent
+78,Aqueous dispersion,patent
+78,Surface-functionalised inorganic oxides,patent
+78,Fluorochemical,patent
+80,N/A,patent
+83,Lens-like radiant energy,patent
+84,Humidity responsive materials,patent
+84,Contraction/relaxation characteristics,patent
+84,Silk,patent
+87,Carpet tiles,patent
+87,Random installation,patent
+87,Side-by-side orientation,patent
+89,Insect repellant,patent
+92,Microfluidics device,patent
+92,In vitro metabolic engineering,patent
+93,N/A,patent
+96,N/A,patent
+98,Dynamic mechanical polymer nanocomposites,patent
+101,Spider silk proteins,patent
+101,Protein polymers,patent
+106,Mono-wing,patent
+106,Aircraft,patent
+106,Winged seed,patent
+106,Autonomous,patent
+113,Nanoscale-to-microscale,patent
+113,Three dimensional,patent
+114,Graft pollymers,patent
+114,Sodium poly (aspartate),patent
+114,Aqueous medium,patent
+116,Textile fibres,patent
+116,Hydrophobic,patent
+116,Oleophobic,patent
+116,Self-cleaning,patent
+118,N/A,patent
+122,Microstamped patterns,patent
+122,Plate adhesion,patent
+122,Biological materials,patent
+122,Cell adhesion,patent
+123,Optically active structure,patent
+123,Bird protection,patent
+123,Transparent glasss,patent
+126,Protective headgear,patent
+126,Protective armour,patent
+128,Cellular,patent
+128,Inflatable,patent
+128,Building element,patent
+130,Ultrastrong,patent
+130,Polymer nanocomposties,patent
+130,Laminate materials,patent
+134,Electromagnetic sensor,patent
+134,Quantum confinement structures,patent
+135,Enablement state decision,patent
+135,Energy consuming load,patent
+136,Inferential temperature measurement,patent
+136,Electrochomatic device,patent
+143,Cementitious materials,patent
+143,External stimulus,patent
+144,Self-healing,patent
+144,Cementitous composites,patent
+145,N/A,patent
+146,Self-reparing,patent
+146,Reinforced matrix,patent
+146,Concrete,patent
+147,N/A,patent
+148,Surface topography,patent
+148,Non-toxic,patent
+148,Bioadhesion control,patent
+157,Pivoting sailing rig,patent
+157,Watercraft,patent
+157,Unmanned ocean vehicle,patent
+159,Desiccated product,patent
+159,Amorphous solid matrix,patent
+160,N/A,patent
+162,Thermal-mechanical positioning,patent
+162,Radiation tracking,patent
+164,Supramolecular polymer,patent
+164,Quadrupal hydrogen bonding units,patent
+164,Polymer backbone,patent
+165,Surface-immobilized,patent
+165,Antimicrobial,patent
+165,Peptoids,patent
+167,Sealing/filling tissue,patent
+167,Polyfunctional crosslinking agents,patent
+167,Protein polymers,patent
+169,Fan blade,patent
+169,Ornamental design,patent
+169,Balanced single blade,patent
+171,Photocatalysis,patent
+171,Hydrogen process,patent
+172,N/A,patent
+173,N/A,patent
+174,N/A,patent
+176,Hydraulic binder,patent
+176,Cement,patent
+176,Photocatlyst,patent
+177,Peptoid nanostructures,patent
+182,Nanoparticles,patent
+182,Genetically engineered mesoscale virus,patent
+182,Metallic and magnetic materials,patent
+185,Vortex generator,patent
+185,Vortex chamber,patent
+185,Fluid medium,patent
+192,Solid phase reaction,patent
+216,N/A,patent
+217,N/A,patent
+218,N/A,patent
+224,N/A,patent
+232,N/A,patent
+233,N/A,patent
+267,N/A,patent
+273,Robotic fish,patent
+273,Scientific tool,patent
+273,Biomimetic,patent
+277,Walking device,patent
+277,Locomotion,patent
+277,Spring System,patent
+282,N/A,patent
+290,N/A,patent
+292,N/A,patent
+293,N/A,patent
+315,N/A,patent
+320,Electromagnetic sensor,patent
+320,Quantum confinement structures,patent
+348,NA,patent
+351,N/A,patent
+354,N/A,patent
