@@ -1,13 +1,10 @@
 # BioM Innovation Database — Data Cleaning Notes
 
-Companion documentation for `clean_biom_data.py`. This explains what the
-pipeline does to the raw Excel export and why, field by field. Code
-comments were kept deliberately minimal — this document is the source of
-truth for the reasoning.
+This explains what the pipeline does to the raw Excel export and why.
 
 ---
 
-## Part 1: Manual Data Realignment (done by Julian, outside the pipeline)
+## Part 1: Manual Data Realignment (done manually by Julian, outside the cleaning pipeline)
 
 Before the pipeline described in this document could run reliably, the
 raw Google Sheet export had extensive **column-shift contamination**: for
@@ -29,7 +26,7 @@ during the manual review):
   entirely for a number of rows; corrected by using `case_id` to locate
   the right row and move the value back to the correct field.
 
-**How this was resolved:** Julian manually reviewed and corrected these
+**How this was resolved:** I manually reviewed and corrected these
 cases directly in the source Google Sheet, row by row, using `case_id` to
 confirm which row a misplaced value belonged to before moving it back.
 This work is not logged at the individual-cell level — there is no
@@ -56,12 +53,9 @@ Automating a "best guess" fix for these would have risked introducing
 new, harder-to-detect misalignment, so the decision was to leave them
 flagged for manual review rather than guess.
 
-**Recommendation (Julian's, not a pipeline conclusion):** future updates
-to this dataset should be based on the cleaned output of this pipeline
-(`cases.csv` and the four child tables), not by continuing to layer new
-entries onto the original raw sheet. Given how extensively the original
-sheet was contaminated, continuing to build directly on it going forward
-is not considered worthwhile.
+**Recommendation:** 
+future updates to this dataset should be based on the cleaned data, not by continuing to layer new
+entries onto the original raw sheet. 
 
 ---
 
