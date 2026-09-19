@@ -1,7 +1,7 @@
 """
 clean_biom_data.py — Data cleaning pipeline for the BioM Innovation Database.
 
-Input:  a single Excel file exported from the professors' Google Sheet.
+Input:  a single Excel file exported from the Google Sheet.
 Output: five clean tables (cases, case_disciplines, case_keywords,
         case_patents, case_ecosystem_services) plus a diagnostic report
         of suspected row-level column shifts, all written as CSV.
