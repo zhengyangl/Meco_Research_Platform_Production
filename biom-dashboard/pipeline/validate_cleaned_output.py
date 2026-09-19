@@ -2,7 +2,7 @@
 validate_cleaned_output.py — Structural validation for clean_biom_data's
 output tables (cases.csv + the 4 child tables).
 
-Run this AFTER the cleaning notebook/pipeline, pointing it at the same
+Run this AFTER the cleaning pipeline, pointing it at the same
 input file and output directory, to confirm the tables are internally
 consistent — row count preserved, no duplicate IDs, every child-table
 case_id resolves to a real case, and the column-count change is
@@ -14,7 +14,7 @@ written CSVs and cross-checks them against each other and against the
 original Excel file.
 
 Usage:
-    python validate_cleaned_output.py --input "BIOM DATABASE FULL_1.xlsx" --output-dir clean_output
+    python validate_cleaned_output.py --input "BIOM DATABASE FULL.xlsx" --output-dir clean_output
 """
 
 import argparse
