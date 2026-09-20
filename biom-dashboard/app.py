@@ -144,9 +144,13 @@ def get_filtered_cases() -> pd.DataFrame:
 # HERO + SEARCH + FILTERS
 # ════════════════════════════════════════════════════════════════
 st.markdown(
-    f'<div class="hero-box"><span class="hero-nav-placeholder">Research Tools ↗ (coming soon)</span>'
-    f'<h1>BioM Innovation Database</h1>'
-    f'<p>{len(cases_all):,} cases of biology inspiring innovation, from lab research to commercial products.'
+    f"""
+    <div class="hero-box">
+        <span class="hero-nav-placeholder">Research Tools ↗ (coming soon)</span>
+        <h1>BioM Innovation Database</h1>
+        <p>{len(cases_all):,} cases of biology inspiring innovation, from lab research to commercial products.</p>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
