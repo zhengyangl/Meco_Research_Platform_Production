@@ -1,4 +1,4 @@
-"""BioM Innovation Database."""
+"""BioM Innovation Database — dashboard over the cleaned 5-table dataset."""
 
 import io
 import zipfile
@@ -28,7 +28,7 @@ st.markdown("""
     --amber: #D4870A;
 }
 .stApp { background: var(--off-white); }
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
 
 .hero-box {
     background: var(--dark-green);
@@ -155,14 +155,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-_search_col, _clear_col = st.columns([5, 1])
-with _search_col:
+with st.sidebar:
     st.text_input("Search", key="search", placeholder="Search by product, organism, keyword, institution…",
                    label_visibility="collapsed")
-with _clear_col:
     st.button("Clear filters", on_click=clear_filters, use_container_width=True)
-
-with st.sidebar:
     st.markdown("### Filters")
     with st.expander("Classification", expanded=True):
         st.multiselect("Kingdom", sorted(cases_all["Kingdom"].dropna().unique()), key="f_kingdom")
@@ -266,14 +262,14 @@ else:
     """)
 
     _MIN_WIDTHS = {
-        "case_id": 110, "Case": 220, "Mimic": 160, "Kingdom": 110,
+        "case_id": 90, "Case": 240, "Mimic": 160, "Kingdom": 110,
         "Product Phase": 170, "Company or Institution Name": 200,
         "Continent": 130, "Concept Yr": 110, "Commercial Yr": 120,
     }
     _HEADER_LABELS = {"case_id": "case_id", "Company or Institution Name": "Institution", **_HIDEABLE_COLS}
 
     gb = GridOptionsBuilder.from_dataframe(table_df)
-    gb.configure_selection("single", use_checkbox=False)
+    gb.configure_selection("multiple", use_checkbox=True, header_checkbox=True)
     # Matches Explorer's own pattern exactly: a single tooltipValueGetter
     # on the default column config shows the full cell value on hover for
     # every column, without needing tooltipField set individually on each
@@ -292,16 +288,44 @@ else:
             hide=(col in _HIDEABLE_COLS and col not in _visible_extra),
         )
     gb.configure_column("Product Phase", cellStyle=phase_style)
-    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
+    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=10)
     grid_response = AgGrid(
         table_df, gridOptions=gb.build(), height=480, allow_unsafe_jscode=True,
         theme="alpine", update_on=["selectionChanged"], fit_columns_on_grid_load=False,
+        custom_css={
+            ".ag-header-cell-label": {"justify-content": "center"},
+            # Excludes ag-grid's own right-aligned numeric-cell class, so
+            # case_id / Concept Yr / Commercial Yr keep their natural
+            # right alignment while every other (text) column goes left.
+            ".ag-cell:not(.ag-right-aligned-cell)": {"text-align": "left", "justify-content": "flex-start"},
+        },
     )
 
     selected = grid_response.get("selected_rows")
-    if selected is not None and len(selected):
-        selected_case_id = int(selected.iloc[0]["case_id"]) if hasattr(selected, "iloc") else int(selected[0]["case_id"])
-        st.session_state["_open_case"] = selected_case_id
+    n_selected = 0 if selected is None else len(selected)
+    selected_ids = []
+    if n_selected:
+        selected_ids = (
+            selected["case_id"].astype(int).tolist() if hasattr(selected, "iloc")
+            else [int(r["case_id"]) for r in selected]
+        )
+
+    _act1, _act2, _act3 = st.columns([1.3, 1.7, 5])
+    with _act1:
+        if st.button("View Details", disabled=(n_selected != 1), use_container_width=True):
+            st.session_state["_open_case"] = selected_ids[0]
+            st.rerun()
+    with _act2:
+        if n_selected:
+            selected_export_df = filtered[filtered["case_id"].isin(selected_ids)]
+            st.download_button(
+                f"⬇ Download selected ({n_selected})", data=build_download_zip(selected_export_df),
+                file_name="biom_export_selected.zip", mime="application/zip", use_container_width=True,
+            )
+        else:
+            st.button("⬇ Download selected", disabled=True, use_container_width=True)
+    if n_selected > 1:
+        st.caption("Select exactly one row to view its details.")
 
 # ════════════════════════════════════════════════════════════════
 # VISUALIZATIONS — secondary, collapsed by default
@@ -388,59 +412,75 @@ with st.expander("📊 Charts & trends"):
 # ════════════════════════════════════════════════════════════════
 if st.session_state.get("_open_case") is not None:
 
-    @st.dialog(" ", width="large")
+    @st.dialog(" ", width="medium")
     def show_detail(case_id: int):
         row = cases_all[cases_all["case_id"] == case_id].iloc[0]
 
         st.markdown(f"""
-        <div style="background: var(--dark-green); margin: -1rem -1rem 1rem -1rem; padding: 22px 26px 18px; border-radius: 8px 8px 0 0;">
-            <div style="color:#fff; font-size:19px; font-weight:700; margin-bottom:6px;">{row['display_name']}</div>
+        <div style="background: var(--dark-green); margin: -1rem -1rem 0.75rem -1rem; padding: 18px 26px 14px; border-radius: 8px 8px 0 0;">
+            <div style="color:#fff; font-size:19px; font-weight:700; margin-bottom:4px;">{row['display_name']}</div>
             <div style="color:#5DCAA5; font-size:12.5px;">{row.get('Mimic') or ''} · Case #{case_id}</div>
         </div>
         """, unsafe_allow_html=True)
 
+        def _kv_grid(pairs, columns=2):
+            """Renders (label, value) pairs as a single compact HTML grid,
+            batched into one st.markdown call. Any pair with a missing
+            value (pd.isna, not a Python-truthiness check — NaN is truthy
+            in Python, so `value or '—'` silently prints 'nan' instead of
+            falling back) is skipped entirely rather than shown as '—',
+            which also keeps the panel from padding itself out with
+            placeholders for data that isn't there."""
+            items = [(l, v) for l, v in pairs if pd.notna(v) and str(v).strip() != ""]
+            if not items:
+                return
+            cells = "".join(
+                f'<div><div style="color:var(--muted);font-size:10.5px;text-transform:uppercase;'
+                f'letter-spacing:0.03em;margin-bottom:1px;">{label}</div>'
+                f'<div style="font-size:14px;color:var(--charcoal);margin-bottom:10px;">{value}</div></div>'
+                for label, value in items
+            )
+            st.markdown(
+                f'<div style="display:grid;grid-template-columns:repeat({columns},1fr);gap:0 18px;">{cells}</div>',
+                unsafe_allow_html=True,
+            )
+
         if pd.notna(row.get("Product Description")):
             st.markdown("**Description**")
-            st.write(row["Product Description"])
+            st.caption(row["Product Description"])
 
         st.markdown("**Biological Classification**")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.caption("Kingdom"); st.write(row.get("Kingdom") or "—")
-            st.caption("Group"); st.write(row.get("Group") or "—")
-            st.caption("Phylum"); st.write(row.get("Phylum") or "—")
-        with c2:
-            st.caption("Mimic System"); st.write(row.get("Mimic System") or "—")
-            st.caption("Mimic Subsystem"); st.write(row.get("Mimic Subsystem") or "—")
-            st.caption("Mimic Suprasystem"); st.write(row.get("Mimic Suprasystem") or "—")
+        _kv_grid([
+            ("Kingdom", row.get("Kingdom")), ("Mimic System", row.get("Mimic System")),
+            ("Group", row.get("Group")), ("Mimic Subsystem", row.get("Mimic Subsystem")),
+            ("Phylum", row.get("Phylum")), ("Mimic Suprasystem", row.get("Mimic Suprasystem")),
+        ])
 
         biom_tags = [t for t, present in [
             ("Function", row.get("biom_type_function")), ("Form", row.get("biom_type_form")),
             ("Process", row.get("biom_type_process")), ("Interaction", row.get("biom_type_interaction")),
         ] if present is True]
         if biom_tags:
-            st.markdown("**BioM Type**")
-            st.markdown("".join(f'<span class="pill">{t}</span>' for t in biom_tags), unsafe_allow_html=True)
+            st.markdown("**BioM Type** &nbsp;" + "".join(f'<span class="pill">{t}</span>' for t in biom_tags), unsafe_allow_html=True)
 
-        st.markdown("**Timeline**")
+        timeline_parts = []
         for label, year_field in [("Concept", "Concept Year"), ("Prototype", "Prototype Year"), ("Commercial", "Commercial Year")]:
             year = row.get(f"{year_field}_year")
             qualifier = row.get(f"{year_field}_year_qualifier")
-            raw = row.get(f"{year_field}_year_raw")
             if pd.notna(year):
                 suffix = f" ({qualifier})" if pd.notna(qualifier) else ""
-                st.caption(f"{label}: {int(year)}{suffix}" + (f" — as recorded: \"{raw}\"" if pd.notna(qualifier) and pd.notna(raw) else ""))
+                timeline_parts.append(f"{label}: {int(year)}{suffix}")
+        if timeline_parts:
+            st.markdown("**Timeline** &nbsp; " + " &nbsp;·&nbsp; ".join(timeline_parts), unsafe_allow_html=True)
 
         svc = services_all[services_all["case_id"] == case_id]["ecosystem_service"].tolist()
         if svc:
-            st.markdown("**Ecosystem Services**")
-            st.markdown("".join(f'<span class="pill">{s}</span>' for s in svc), unsafe_allow_html=True)
+            st.markdown("**Ecosystem Services** &nbsp;" + "".join(f'<span class="pill">{s}</span>' for s in svc), unsafe_allow_html=True)
 
         disc = disciplines_all[disciplines_all["case_id"] == case_id]["discipline"].tolist()
         kw = keywords_all[keywords_all["case_id"] == case_id]["keyword"].tolist()
         if disc or kw:
-            st.markdown("**Disciplines & Keywords**")
-            st.markdown("".join(f'<span class="pill">{d}</span>' for d in disc + kw), unsafe_allow_html=True)
+            st.markdown("**Disciplines & Keywords** &nbsp;" + "".join(f'<span class="pill">{d}</span>' for d in disc + kw), unsafe_allow_html=True)
 
         pat = patents_all[patents_all["case_id"] == case_id]
         if len(pat):
@@ -450,16 +490,14 @@ if st.session_state.get("_open_case") is not None:
             st.dataframe(pat_display, hide_index=True, use_container_width=True)
 
         st.markdown("**Origin**")
-        c3, c4 = st.columns(2)
-        with c3:
-            st.caption("Institution"); st.write(row.get("Company or Institution Name") or "—")
-            st.caption("Academia / Industry"); st.write(row.get("Academia or Industry") or "—")
-        with c4:
-            st.caption("Country"); st.write(row.get("Country") or "—")
-            st.caption("Continent"); st.write(row.get("Continent") or "—")
+        _kv_grid([
+            ("Institution", row.get("Company or Institution Name")), ("Country", row.get("Country")),
+            ("Academia / Industry", row.get("Academia or Industry")), ("Continent", row.get("Continent")),
+        ])
 
-        with st.expander("Linguistic Evidence"):
-            st.caption("Word Category"); st.write(row.get("Word Category") or "—")
+        if pd.notna(row.get("Word Category")):
+            with st.expander("Linguistic Evidence"):
+                st.caption(f"Word Category: {row['Word Category']}")
 
         if st.button("Close"):
             st.session_state["_open_case"] = None
