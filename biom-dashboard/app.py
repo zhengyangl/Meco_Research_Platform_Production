@@ -146,12 +146,7 @@ def get_filtered_cases() -> pd.DataFrame:
 st.markdown(
     f'<div class="hero-box"><span class="hero-nav-placeholder">Research Tools ↗ (coming soon)</span>'
     f'<h1>BioM Innovation Database</h1>'
-    f'<p>{len(cases_all):,} verified biomimetic innovation cases — explore products and research '
-    f'that transfer solutions from biology into engineered systems.</p>'
-    f'<p style="margin-top:8px;">Each case links a commercial or research product to the biological '
-    f'organism or process it draws from, classified by kingdom, biological organization level, and '
-    f'the type of biomimicry involved (form, function, process, or interaction). Filter by discipline, '
-    f'ecosystem service, region, or timeframe below, or search directly.</p></div>',
+    f'<p>{len(cases_all):,} cases of biology inspiring innovation, from lab research to commercial products.'
     unsafe_allow_html=True,
 )
 
