@@ -1,15 +1,13 @@
 """
 clean_biom_data.py — Data cleaning pipeline for the BioM Innovation Database.
 
-Input:  a single Excel file exported from the Google Sheet.
+Input:  a single Excel file exported from the professors' Google Sheet.
 Output: five clean tables (cases, case_disciplines, case_keywords,
         case_patents, case_ecosystem_services) plus a diagnostic report
         of suspected row-level column shifts, all written as CSV.
 
 Usage:
     python clean_biom_data.py --input BIOM_DATABASE_FULL.xlsx --output-dir clean_output/
-
-See data_cleaning_notes.md for the reasoning behind each rule below.
 """
 
 import argparse
@@ -281,21 +279,24 @@ def blank_known_bad_values(df: pd.DataFrame, report: QualityReport) -> pd.DataFr
     return df
 
 
-def blank_multivalue_continent(df: pd.DataFrame, report: QualityReport) -> pd.DataFrame:
-    col = "Continent"
-    if col not in df.columns:
-        return df
-    mask = df[col].apply(lambda v: pd.notna(v) and ";" in str(v))
-    n = int(mask.sum())
-    if n:
-        examples = df.loc[mask, col].unique().tolist()[:5]
-        report.flag(
-            f"Column 'Continent': blanked {n} value(s) that looked like "
-            f"multiple countries joined with ';' rather than a single "
-            f"continent. Examples: {examples}",
-            "WARNING",
-        )
-        df.loc[mask, col] = pd.NA
+def blank_multivalue_location_fields(df: pd.DataFrame, report: QualityReport) -> pd.DataFrame:
+    """Any Continent or Country value containing ';' is almost certainly
+    multiple locations joined together, not a single value — confirmed
+    pattern for both fields (Sep 2026). Blanked rather than guessed at."""
+    for col in ["Continent", "Country"]:
+        if col not in df.columns:
+            continue
+        mask = df[col].apply(lambda v: pd.notna(v) and ";" in str(v))
+        n = int(mask.sum())
+        if n:
+            examples = df.loc[mask, col].unique().tolist()[:5]
+            report.flag(
+                f"Column '{col}': blanked {n} value(s) that looked like "
+                f"multiple locations joined with ';' rather than a single "
+                f"{col.lower()}. Examples: {examples}",
+                "WARNING",
+            )
+            df.loc[mask, col] = pd.NA
     return df
 
 
@@ -715,7 +716,7 @@ def run_pipeline(input_path: Path, output_dir: Path):
     df = normalize_yes_no(df, report)
     df = split_biom_type(df, report)
     df = blank_known_bad_values(df, report)
-    df = blank_multivalue_continent(df, report)
+    df = blank_multivalue_location_fields(df, report)
 
     for col, whitelist in [
         ("Case Status", CASE_STATUS_WHITELIST),
