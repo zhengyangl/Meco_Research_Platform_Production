@@ -1,1 +1,9 @@
-
+# BioM dashboard theme.
+ 
+[theme]
+base = "light"                        # ignore the viewer's OS dark mode
+primaryColor = "#1D9E75"              # radio, tabs, tags, slider, checkbox  (--teal)
+backgroundColor = "#F7FAF8"           # page                                  (--off-white)
+secondaryBackgroundColor = "#E1F5EE"  # input fields, multiselect box         (--pale-teal)
+textColor = "#1E2D24"                 #                                       (--charcoal)
+ 
