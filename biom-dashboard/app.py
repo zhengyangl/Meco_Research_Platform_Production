@@ -1,6 +1,7 @@
 """BioM Innovation Database — dashboard over the cleaned 5-table dataset."""
 
 import html
+import logging
 import io
 import zipfile
 from pathlib import Path
@@ -9,8 +10,10 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from st_aggrid.shared import StAggridTheme
 
 DATA_DIR = Path(__file__).parent / "data" / "clean"
+log = logging.getLogger("biom_dashboard")  # developer diagnostics go to the server log, not the page
 
 st.set_page_config(page_title="BioM Innovation Database", page_icon="🌿", layout="wide")
 
@@ -60,6 +63,16 @@ st.markdown("""
 [data-testid="stTabs"] [role="tab"]:hover { border-color: var(--teal); }
 [data-testid="stTabs"] [role="tab"][aria-selected="true"] { background: var(--mid-green); border-color: var(--mid-green); }
 [data-testid="stTabs"] [role="tab"][aria-selected="true"] p { color: #FFFFFF; }
+
+.metric-card { background: #FFFFFF; border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px 12px; margin-bottom: 14px; }
+.metric-card .mc-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate); }
+.metric-card .mc-value { font-size: 28px; font-weight: 700; color: var(--dark-green); line-height: 1.2; margin-top: 4px; }
+.metric-card .mc-sub { font-size: 12px; color: var(--muted); min-height: 16px; }
+
+.empty-state { background: #FFFFFF; border: 1px dashed var(--border); border-radius: 10px; padding: 28px 24px; text-align: center; margin: 8px 0 10px; }
+.empty-state .es-title { font-size: 16px; font-weight: 700; color: var(--charcoal); margin-bottom: 6px; }
+.empty-state .es-body { font-size: 13px; color: var(--slate); }
+.empty-state .es-filters { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -76,6 +89,13 @@ def load_data():
 
 cases_all, disciplines_all, keywords_all, patents_all, services_all = load_data()
 
+# All of a case's keywords (product + patent) as one string, for free-text search.
+_KEYWORD_TEXT = (
+    keywords_all.dropna(subset=["keyword"])
+    .groupby("case_id")["keyword"]
+    .agg(lambda kws: " ".join(kws.astype(str)))
+)
+
 KINGDOM_COLORS = {
     "Animalia": "#B8935F", "Plantae": "#5DAA6E", "Fungi": "#9B6BA8",
     "Protista": "#4A90B8", "Monera": "#C4626E",
@@ -83,6 +103,24 @@ KINGDOM_COLORS = {
 
 COMPARE_MIN, COMPARE_MAX = 2, 4
 VERIFIED_STATUS = "Complete, with interview"
+
+# AgGrid renders inside its own iframe, so page CSS variables (var(--teal) etc.)
+# don't reach it. Colours are set through ag-Grid's Theming API instead,
+# using literal hex values that mirror the :root palette above.
+GRID_THEME = StAggridTheme(base="alpine").withParams(
+    accentColor="#1D9E75",                 # checkboxes, focus ring  (--teal)
+    foregroundColor="#1E2D24",             # cell text               (--charcoal)
+    borderColor="#DCE8E2",                 # grid + row borders      (--border)
+    headerBackgroundColor="#E1F5EE",       # header band             (--pale-teal)
+    headerTextColor="#0A2E1F",             #                         (--dark-green)
+    headerFontWeight=600,
+    rowHoverColor="#F0F8F4",
+    selectedRowBackgroundColor="#D4EFE3",
+    oddRowBackgroundColor="#FFFFFF",       # no zebra striping
+    wrapperBorderRadius=8,
+    columnBorder=False,
+    headerColumnBorder=False,
+)
 
 # ════════════════════════════════════════════════════════════════
 # STATE
@@ -150,7 +188,10 @@ def get_filtered_cases() -> pd.DataFrame:
     s = st.session_state.search.strip().lower()
     if s:
         search_cols = ["display_name", "Mimic", "Product Description", "Company or Institution Name", "Country"]
-        haystack = df[search_cols].fillna("").agg(" ".join, axis=1).str.lower()
+        haystack = (
+            df[search_cols].fillna("").astype(str).agg(" ".join, axis=1)
+            + " " + df["case_id"].map(_KEYWORD_TEXT).fillna("")
+        ).str.lower()
         df = df[haystack.str.contains(s, regex=False)]
 
     return df
@@ -176,16 +217,77 @@ def count_active_filters() -> int:
     n += tuple(st.session_state.f_year_range) != (_year_min, _year_max)
     return int(n)
 
+
+def active_filter_summary() -> list:
+    """Human-readable list of the filters currently applied, for the empty state."""
+    parts = []
+    if st.session_state.search.strip():
+        parts.append(f'Search \u201c{st.session_state.search.strip()}\u201d')
+    for label, key in [("Kingdom", "f_kingdom"), ("Product Phase", "f_phase"), ("Continent", "f_continent"),
+                       ("Discipline", "f_discipline"), ("Ecosystem Service", "f_service")]:
+        if st.session_state[key]:
+            parts.append(f"{label}: {', '.join(st.session_state[key])}")
+    lo, hi = st.session_state.f_year_range
+    if (lo, hi) != (_year_min, _year_max):
+        parts.append(f"Concept Year {lo}\u2013{hi}")
+    return parts
+
+
+def render_empty_state(key: str):
+    """One consistent panel for 'filters matched nothing', shown in each tab
+    instead of per-chart 'no data' captions. `key` keeps the button unique,
+    since both tabs are rendered on every run."""
+    summary = active_filter_summary()
+    joined = html.escape(" \u00b7 ".join(summary))
+    filters_html = f'<div class="es-filters">Active: {joined}</div>' if summary else ""
+    st.markdown(
+        '<div class="empty-state"><div class="es-title">No cases match the current filters</div>'
+        '<div class="es-body">Try removing a filter or broadening the year range.</div>'
+        f'{filters_html}</div>',
+        unsafe_allow_html=True,
+    )
+    if summary:
+        _l, _m, _r = st.columns([2, 1, 2])
+        _m.button("Clear all filters", key=f"empty_clear_{key}", on_click=clear_filters, width="stretch")
+
+
+# Computed from session_state BEFORE the filter widgets are drawn below, so the
+# metrics can sit above the filter bar. This is safe: a keyed widget's new value
+# is written to session_state before the rerun it triggers begins.
 filtered = get_filtered_cases()
 
 # ════════════════════════════════════════════════════════════════
 # METRICS
 # ════════════════════════════════════════════════════════════════
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Total cases", f"{len(filtered):,}")
-m2.metric("Commercial products", int((filtered["Product Phase"] == "Commercially Available").sum()))
-m3.metric("Kingdoms represented", filtered["Kingdom"].nunique())
-m4.metric("Countries", filtered["Country"].nunique())
+def _count_countries(df: pd.DataFrame) -> int:
+    """Same rule as the map (build_country_counts): distinct country_iso3 among
+    rows with a Country, so spelling variants ("USA" / "United States") count
+    once and ungeocoded values are left out of both. Falls back to raw Country
+    only if geocode_countries.py hasn't been run (the map is hidden then)."""
+    if "country_iso3" not in df.columns:
+        return df["Country"].nunique()
+    return df.loc[df["Country"].notna(), "country_iso3"].nunique()
+
+
+def _metric_values(df: pd.DataFrame) -> list:
+    return [
+        ("Total cases", len(df)),
+        ("Commercial products", int((df["Product Phase"] == "Commercially Available").sum())),
+        ("Kingdoms represented", df["Kingdom"].nunique()),
+        ("Countries", _count_countries(df)),
+    ]
+
+
+# With filters active, each card also shows the unfiltered total ("of 510"),
+# so a filtered number is never mistaken for the database-wide figure.
+_filters_on = count_active_filters() > 0
+for _col, (_label, _val), (_, _total) in zip(st.columns(4), _metric_values(filtered), _metric_values(cases_all)):
+    _sub = f"of {_total:,}" if _filters_on else "&nbsp;"
+    _col.markdown(
+        f'<div class="metric-card"><div class="mc-label">{_label}</div>'
+        f'<div class="mc-value">{_val:,}</div><div class="mc-sub">{_sub}</div></div>',
+        unsafe_allow_html=True,
+    )
 
 # ════════════════════════════════════════════════════════════════
 # FILTER BAR — directly above the table it controls
@@ -201,7 +303,7 @@ with st.container(border=True):
     with _n_col:
         st.caption(f"{_n_active} filter{'s' if _n_active != 1 else ''} active" if _n_active else "No filters applied")
     with _c_col:
-        st.button("Clear all", on_click=clear_filters, disabled=(_n_active == 0), use_container_width=True)
+        st.button("Clear all", on_click=clear_filters, disabled=(_n_active == 0), width="stretch")
 
     # Each filter lives in a fixed-height popover button instead of an inline
     # multiselect: an inline multiselect grows taller with every selected tag,
@@ -218,17 +320,17 @@ with st.container(border=True):
     for _col, (_name, _key, _options) in zip(_fcols[:5], _popover_filters):
         _sel = st.session_state[_key]
         with _col:
-            with st.popover(f"{_name} · {len(_sel)}" if _sel else _name, use_container_width=True,
+            with st.popover(f"{_name} · {len(_sel)}" if _sel else _name, width="stretch",
                             help=", ".join(_sel) if _sel else None):
                 st.multiselect(_name, _options, key=_key, placeholder="All", label_visibility="collapsed")
     with _fcols[5]:
         _lo, _hi = st.session_state.f_year_range
         _yr_changed = (_lo, _hi) != (_year_min, _year_max)
-        with st.popover(f"Concept Year · {_lo}–{_hi}" if _yr_changed else "Concept Year", use_container_width=True):
+        with st.popover(f"Concept Year · {_lo}–{_hi}" if _yr_changed else "Concept Year", width="stretch"):
             st.slider("Concept Year", min_value=_year_min, max_value=_year_max, key="f_year_range")
 
 # ════════════════════════════════════════════════════════════════
-# TABS — Cases | Explore 
+# TABS — Cases | Explore (the filter bar above applies to both)
 # ════════════════════════════════════════════════════════════════
 tab_cases, tab_explore = st.tabs(["Cases", "Explore"])
 
@@ -256,11 +358,12 @@ with tab_cases:
     with _download_col:
         st.download_button(
             "⬇ Download (.zip)", data=build_download_zip(filtered),
-            file_name="biom_export.zip", mime="application/zip", use_container_width=True,
+            file_name="biom_export.zip", mime="application/zip", width="stretch",
+            disabled=filtered.empty,
         )
 
     if filtered.empty:
-        st.info("No cases match your filters.")
+        render_empty_state("cases")
     else:
         _CORE_COLS = ["case_id", "display_name", "Mimic", "Kingdom", "Product Phase",
                       "Company or Institution Name", "Continent", "Concept Year_year", "Commercial Year_year"]
@@ -283,6 +386,11 @@ with tab_cases:
             format_func=lambda x: _HIDEABLE_COLS[x],
         )
 
+        # Default sort: rows with a real Product Name first, rows relying on
+        # the display_name fallback (Mimic-derived or "Untitled case") last.
+        # has_real_name must come from "Product Name" itself, not display_name
+        # — display_name is never blank (it always holds either the real name
+        # or a fallback), so it can't be used to tell the two cases apart.
         sort_df = filtered.copy()
         sort_df["_has_real_name"] = sort_df["Product Name"].notna()
         sort_df = sort_df.sort_values("_has_real_name", ascending=False)
@@ -291,6 +399,10 @@ with tab_cases:
             "display_name": "Case", "Concept Year_year": "Concept Yr", "Commercial Year_year": "Commercial Yr",
         })
 
+        # Matches Explorer's approach exactly: cellStyle returns a JS style
+        # object, which ag-grid applies natively — cellRenderer returning an
+        # HTML string does NOT get interpreted as HTML by default and shows
+        # as literal text instead.
         phase_style = JsCode("""
         function(params) {
             if (params.value === 'Commercially Available') {
@@ -312,6 +424,12 @@ with tab_cases:
         gb = GridOptionsBuilder.from_dataframe(table_df)
         gb.configure_selection("multiple", use_checkbox=True, header_checkbox=True,
                                suppressRowClickSelection=True)
+        # Matches Explorer's own pattern exactly: a single tooltipValueGetter
+        # on the default column config shows the full cell value on hover for
+        # every column, without needing tooltipField set individually on each
+        # one. filter=False removes the per-column funnel icon — the filter bar
+        # above the table is the filtering mechanism here (it also drives the
+        # metrics and exports, which per-column grid filters would not).
         gb.configure_default_column(
             resizable=True, sortable=True, filter=False,
             tooltipValueGetter=JsCode("function(params) { return params.value; }"),
@@ -327,7 +445,7 @@ with tab_cases:
         gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=10)
         grid_response = AgGrid(
             table_df, gridOptions=gb.build(), height=480, allow_unsafe_jscode=True,
-            theme="alpine", update_on=["selectionChanged"], fit_columns_on_grid_load=False,
+            theme=GRID_THEME, update_on=["selectionChanged"], fit_columns_on_grid_load=False,
             custom_css={
                 ".ag-header-cell-label": {"justify-content": "center"},
                 # Excludes ag-grid's own right-aligned numeric-cell class, so
@@ -349,12 +467,12 @@ with tab_cases:
         _can_compare = COMPARE_MIN <= n_selected <= COMPARE_MAX
         _act1, _act2, _act3, _act4 = st.columns([1.3, 1.4, 1.8, 3.5])
         with _act1:
-            if st.button("View Details", disabled=(n_selected != 1), use_container_width=True,
+            if st.button("View Details", disabled=(n_selected != 1), width="stretch",
                          help="Select exactly one row to view its details."):
                 st.session_state["_pending_view"] = ("detail", selected_ids[0])
         with _act2:
             _cmp_label = f"Compare ({n_selected})" if _can_compare else "Compare"
-            if st.button(_cmp_label, disabled=not _can_compare, use_container_width=True,
+            if st.button(_cmp_label, disabled=not _can_compare, width="stretch",
                          help=f"Select {COMPARE_MIN}–{COMPARE_MAX} rows to compare them side by side."):
                 st.session_state["_pending_view"] = ("compare", selected_ids)
         with _act3:
@@ -362,10 +480,10 @@ with tab_cases:
                 selected_export_df = filtered[filtered["case_id"].isin(selected_ids)]
                 st.download_button(
                     f"⬇ Download selected ({n_selected})", data=build_download_zip(selected_export_df),
-                    file_name="biom_export_selected.zip", mime="application/zip", use_container_width=True,
+                    file_name="biom_export_selected.zip", mime="application/zip", width="stretch",
                 )
             else:
-                st.button("⬇ Download selected", disabled=True, use_container_width=True)
+                st.button("⬇ Download selected", disabled=True, width="stretch")
         if n_selected > COMPARE_MAX:
             st.caption(f"Compare supports up to {COMPARE_MAX} cases — {n_selected} are currently selected.")
 
@@ -385,6 +503,14 @@ _MAP_BIN_COLORS = ["#CDEADD", "#8FD0B3", "#45A983", "#177A57", "#0A4430"]
 
 def _map_bin(n: int) -> str:
     return next(label for lo, hi, label in _MAP_BINS if lo <= n <= hi)
+
+
+@st.cache_resource
+def _log_unmapped_once(unmapped: tuple):
+    """Logs each distinct set of ungeocoded values once per server process,
+    rather than on every rerun."""
+    log.warning("Country values with no geocode (excluded from map): %s. "
+                "Check them against COUNTRY_ALIASES in geocode_countries.py and re-run it.", list(unmapped))
 
 
 def build_country_counts(df: pd.DataFrame) -> pd.DataFrame:
@@ -429,132 +555,138 @@ def _level_select(label: str, key: str, frame: pd.DataFrame, col: str) -> pd.Dat
 
 
 with tab_explore:
-    st.markdown('<div class="section-title">Explore by Taxonomy</div>', unsafe_allow_html=True)
-    tax = build_taxonomy_frame(filtered)
-    if tax.empty:
-        st.caption("No cases match the current filters.")
+    if filtered.empty:
+        render_empty_state("explore")
     else:
-        _tx_chart, _tx_browse = st.columns([1.1, 1])
-        with _tx_chart:
-            fig_tax = px.sunburst(
-                tax, path=_TAXON_LEVELS, color="Kingdom",
-                color_discrete_map={**KINGDOM_COLORS, _UNRECORDED: "#C9CFCB"}, height=460,
-            )
-            fig_tax.update_traces(hovertemplate="<b>%{label}</b><br>%{value} cases<extra></extra>")
-            fig_tax.update_layout(margin=dict(l=0, r=0, t=10, b=0))
-            st.plotly_chart(fig_tax, use_container_width=True)
-            st.caption("Click a ring to zoom into that branch; click the centre to zoom back out.")
-        with _tx_browse:
-            _k = _level_select("Kingdom", "ex_kingdom", tax, "Kingdom")
-            _g = _level_select("Group", "ex_group", _k, "Group")
-            _p = _level_select("Phylum", "ex_phylum", _g, "Phylum")
-            _branch = cases_all[cases_all["case_id"].isin(_p["case_id"])]
-            st.caption(f"{len(_branch):,} case{'s' if len(_branch) != 1 else ''} in this branch")
-            st.dataframe(
-                _branch[["case_id", "display_name", "Mimic", "Product Phase"]].rename(columns={"display_name": "Case"}),
-                hide_index=True, use_container_width=True, height=300,
-            )
-
-    st.markdown('<div class="section-title">Charts</div>', unsafe_allow_html=True)
-    viz1, viz2 = st.columns(2)
-
-    with viz1:
-        st.markdown('<div class="section-title">Cases by Ecosystem Service</div>', unsafe_allow_html=True)
-        svc_filtered = services_all[services_all["case_id"].isin(filtered["case_id"])]
-        if len(svc_filtered):
-            counts = svc_filtered["ecosystem_service"].value_counts().sort_values()
-            fig = px.bar(x=counts.values, y=counts.index, orientation="h",
-                          labels={"x": "Cases", "y": ""}, height=420)
-            fig.update_traces(marker_color="#1D9E75")
-            fig.update_layout(margin=dict(l=0, r=10, t=10, b=10), plot_bgcolor="white")
-            st.plotly_chart(fig, use_container_width=True)
+        st.markdown('<div class="section-title">Explore by Taxonomy</div>', unsafe_allow_html=True)
+        tax = build_taxonomy_frame(filtered)
+        if tax.empty:
+            st.caption("No cases match the current filters.")
         else:
-            st.caption("No ecosystem-service data for the current filter.")
+            _tx_chart, _tx_browse = st.columns([1.1, 1])
+            with _tx_chart:
+                fig_tax = px.sunburst(
+                    tax, path=_TAXON_LEVELS, color="Kingdom",
+                    color_discrete_map={**KINGDOM_COLORS, _UNRECORDED: "#C9CFCB"}, height=460,
+                )
+                fig_tax.update_traces(hovertemplate="<b>%{label}</b><br>%{value} cases<extra></extra>")
+                fig_tax.update_layout(margin=dict(l=0, r=0, t=10, b=0))
+                st.plotly_chart(fig_tax)
+                st.caption("Click a ring to zoom into that branch; click the centre to zoom back out.")
+            with _tx_browse:
+                _k = _level_select("Kingdom", "ex_kingdom", tax, "Kingdom")
+                _g = _level_select("Group", "ex_group", _k, "Group")
+                _p = _level_select("Phylum", "ex_phylum", _g, "Phylum")
+                _branch = cases_all[cases_all["case_id"].isin(_p["case_id"])]
+                st.caption(f"{len(_branch):,} case{'s' if len(_branch) != 1 else ''} in this branch")
+                st.dataframe(
+                    _branch[["case_id", "display_name", "Mimic", "Product Phase"]].rename(columns={"display_name": "Case"}),
+                    hide_index=True, height=300,
+                )
 
-    with viz2:
-        st.markdown('<div class="section-title">Kingdom × Product Phase</div>', unsafe_allow_html=True)
-        if len(filtered):
-            cross = filtered.groupby(["Product Phase", "Kingdom"]).size().reset_index(name="count")
-            fig2 = px.bar(cross, x="Product Phase", y="count", color="Kingdom",
-                           color_discrete_map=KINGDOM_COLORS, height=420)
-            fig2.update_layout(margin=dict(l=0, r=10, t=10, b=10), plot_bgcolor="white", xaxis_title="")
-            st.plotly_chart(fig2, use_container_width=True)
+        st.markdown('<div class="section-title">Charts</div>', unsafe_allow_html=True)
+        viz1, viz2 = st.columns(2)
+
+        with viz1:
+            st.markdown('<div class="section-title">Cases by Ecosystem Service</div>', unsafe_allow_html=True)
+            svc_filtered = services_all[services_all["case_id"].isin(filtered["case_id"])]
+            if len(svc_filtered):
+                counts = svc_filtered["ecosystem_service"].value_counts().sort_values()
+                fig = px.bar(x=counts.values, y=counts.index, orientation="h",
+                              labels={"x": "Cases", "y": ""}, height=420)
+                fig.update_traces(marker_color="#1D9E75")
+                fig.update_layout(margin=dict(l=0, r=10, t=10, b=10), plot_bgcolor="white")
+                st.plotly_chart(fig)
+            else:
+                st.caption("No ecosystem-service data for the current filter.")
+
+        with viz2:
+            st.markdown('<div class="section-title">Kingdom × Product Phase</div>', unsafe_allow_html=True)
+            if len(filtered):
+                cross = filtered.groupby(["Product Phase", "Kingdom"]).size().reset_index(name="count")
+                fig2 = px.bar(cross, x="Product Phase", y="count", color="Kingdom",
+                               color_discrete_map=KINGDOM_COLORS, height=420)
+                fig2.update_layout(margin=dict(l=0, r=10, t=10, b=10), plot_bgcolor="white", xaxis_title="")
+                st.plotly_chart(fig2)
+            else:
+                st.caption("No data for the current filter.")
+
+        st.markdown('<div class="section-title">Annual Trend by Kingdom</div>', unsafe_allow_html=True)
+        st.radio("Year field", ["Concept Year", "Commercial Year"], key="year_field_choice",
+                 label_visibility="collapsed", horizontal=True)
+        year_col = f"{st.session_state.year_field_choice}_year"
+        trend_df = filtered[filtered[year_col].notna()]
+        if len(trend_df):
+            trend = trend_df.groupby([year_col, "Kingdom"]).size().reset_index(name="count")
+            fig3 = px.bar(trend, x=year_col, y="count", color="Kingdom",
+                           color_discrete_map=KINGDOM_COLORS, height=360)
+            fig3.update_layout(barmode="stack", margin=dict(l=0, r=10, t=10, b=10), plot_bgcolor="white",
+                                xaxis_title="Year", yaxis_title="Cases")
+            st.plotly_chart(fig3)
         else:
-            st.caption("No data for the current filter.")
+            st.caption(f"No cases with a known {st.session_state.year_field_choice} for the current filter.")
 
-    st.markdown('<div class="section-title">Annual Trend by Kingdom</div>', unsafe_allow_html=True)
-    st.radio("Year field", ["Concept Year", "Commercial Year"], key="year_field_choice",
-             label_visibility="collapsed", horizontal=True)
-    year_col = f"{st.session_state.year_field_choice}_year"
-    trend_df = filtered[filtered[year_col].notna()]
-    if len(trend_df):
-        trend = trend_df.groupby([year_col, "Kingdom"]).size().reset_index(name="count")
-        fig3 = px.bar(trend, x=year_col, y="count", color="Kingdom",
-                       color_discrete_map=KINGDOM_COLORS, height=360)
-        fig3.update_layout(barmode="stack", margin=dict(l=0, r=10, t=10, b=10), plot_bgcolor="white",
-                            xaxis_title="Year", yaxis_title="Cases")
-        st.plotly_chart(fig3, use_container_width=True)
-    else:
-        st.caption(f"No cases with a known {st.session_state.year_field_choice} for the current filter.")
-
-    st.markdown('<div class="section-title">Cases by Country</div>', unsafe_allow_html=True)
-    if "country_iso3" not in filtered.columns:
-        st.caption("Run geocode_countries.py on cases.csv to enable this map (adds country_iso3 / country_name_canonical).")
-    else:
-        geo_df = filtered[filtered["Country"].notna()].copy()
-        unmapped = sorted(geo_df.loc[geo_df["country_iso3"].isna(), "Country"].unique().tolist())
-        country_counts = build_country_counts(filtered)
-
-        if len(country_counts):
-            _map_col, _top_col = st.columns([2.3, 1])
-            with _map_col:
-                fig4 = px.choropleth(
-                    country_counts, locations="country_iso3", color="bin",
-                    category_orders={"bin": _MAP_BIN_LABELS},
-                    color_discrete_map=dict(zip(_MAP_BIN_LABELS, _MAP_BIN_COLORS)),
-                    custom_data=["country_name_canonical", "count", "share"], height=460,
-                )
-                fig4.update_traces(
-                    hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]} cases"
-                                  " · %{customdata[2]:.1f}% of mapped cases<extra></extra>",
-                    marker_line_color="#FFFFFF", marker_line_width=0.6,
-                )
-                fig4.update_geos(
-                    projection_type="natural earth", lataxis_range=[-58, 85],
-                    showframe=False, showcoastlines=False,
-                    showcountries=True, countrycolor="#FFFFFF", countrywidth=0.6,
-                    showland=True, landcolor="#E4EAE6", showocean=True, oceancolor="#F7FAF8",
-                    bgcolor="rgba(0,0,0,0)",
-                )
-                fig4.update_layout(
-                    margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)",
-                    legend=dict(title_text="Cases", orientation="h", yanchor="top", y=0.02, xanchor="left", x=0.01),
-                )
-                st.plotly_chart(fig4, use_container_width=True, config={"scrollZoom": True, "displaylogo": False})
-                st.caption("Scroll to zoom, drag to pan, double-click to reset.")
-            with _top_col:
-                top = country_counts.head(10).iloc[::-1]
-                fig5 = px.bar(
-                    top, x="count", y="country_name_canonical", orientation="h", text="count",
-                    color="bin", color_discrete_map=dict(zip(_MAP_BIN_LABELS, _MAP_BIN_COLORS)), height=460,
-                )
-                fig5.update_traces(textposition="outside", cliponaxis=False,
-                                   hovertemplate="<b>%{y}</b><br>%{x} cases<extra></extra>")
-                fig5.update_layout(
-                    title=dict(text="Top countries", font=dict(size=13)), showlegend=False,
-                    margin=dict(l=0, r=24, t=36, b=0), plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                    xaxis=dict(visible=False), yaxis=dict(title="", categoryorder="array", categoryarray=top["country_name_canonical"].tolist()),
-                )
-                st.plotly_chart(fig5, use_container_width=True, config={"displayModeBar": False})
+        st.markdown('<div class="section-title">Cases by Country</div>', unsafe_allow_html=True)
+        if "country_iso3" not in filtered.columns:
+            st.caption("The country map isn't available for this dataset.")
+            log.warning("cases.csv has no country_iso3 column; run geocode_countries.py to enable the map.")
         else:
-            st.caption("No mappable country data for the current filter.")
+            geo_df = filtered[filtered["Country"].notna()].copy()
+            unmapped = sorted(geo_df.loc[geo_df["country_iso3"].isna(), "Country"].unique().tolist())
+            country_counts = build_country_counts(filtered)
 
-        if unmapped:
-            st.caption(f"⚠ {len(unmapped)} country value(s) have no geocode and are excluded above: {unmapped}. "
-                       f"Re-run geocode_countries.py after checking these against COUNTRY_ALIASES.")
+            if len(country_counts):
+                _map_col, _top_col = st.columns([2.3, 1])
+                with _map_col:
+                    fig4 = px.choropleth(
+                        country_counts, locations="country_iso3", color="bin",
+                        category_orders={"bin": _MAP_BIN_LABELS},
+                        color_discrete_map=dict(zip(_MAP_BIN_LABELS, _MAP_BIN_COLORS)),
+                        custom_data=["country_name_canonical", "count", "share"], height=460,
+                    )
+                    fig4.update_traces(
+                        hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]} cases"
+                                      " · %{customdata[2]:.1f}% of mapped cases<extra></extra>",
+                        marker_line_color="#FFFFFF", marker_line_width=0.6,
+                    )
+                    fig4.update_geos(
+                        projection_type="natural earth", lataxis_range=[-58, 85],
+                        showframe=False, showcoastlines=False,
+                        showcountries=True, countrycolor="#FFFFFF", countrywidth=0.6,
+                        showland=True, landcolor="#E4EAE6", showocean=True, oceancolor="#F7FAF8",
+                        bgcolor="rgba(0,0,0,0)",
+                    )
+                    fig4.update_layout(
+                        margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor="rgba(0,0,0,0)",
+                        legend=dict(title_text="Cases", orientation="h", yanchor="top", y=0.02, xanchor="left", x=0.01),
+                    )
+                    st.plotly_chart(fig4, config={"scrollZoom": True, "displaylogo": False})
+                    st.caption("Scroll to zoom, drag to pan, double-click to reset.")
+                with _top_col:
+                    top = country_counts.head(10).iloc[::-1]
+                    fig5 = px.bar(
+                        top, x="count", y="country_name_canonical", orientation="h", text="count",
+                        color="bin", color_discrete_map=dict(zip(_MAP_BIN_LABELS, _MAP_BIN_COLORS)), height=460,
+                    )
+                    fig5.update_traces(textposition="outside", cliponaxis=False,
+                                       hovertemplate="<b>%{y}</b><br>%{x} cases<extra></extra>")
+                    fig5.update_layout(
+                        title=dict(text="Top countries", font=dict(size=13)), showlegend=False,
+                        margin=dict(l=0, r=24, t=36, b=0), plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(visible=False), yaxis=dict(title="", categoryorder="array", categoryarray=top["country_name_canonical"].tolist()),
+                    )
+                    st.plotly_chart(fig5, config={"displayModeBar": False})
+            else:
+                st.caption("No mappable country data for the current filter.")
+
+            if unmapped:
+                _n_unmapped_cases = int(geo_df["country_iso3"].isna().sum())
+                st.caption(f"{_n_unmapped_cases} case{'s' if _n_unmapped_cases != 1 else ''} with an "
+                           f"unrecognised country name {'are' if _n_unmapped_cases != 1 else 'is'} not shown on the map.")
+                _log_unmapped_once(tuple(unmapped))
 
 # ════════════════════════════════════════════════════════════════
-# CASE PROFILE — content builders
+# CASE PROFILE — content builders (pure functions, no rendering)
 # ════════════════════════════════════════════════════════════════
 _STAGES = [("Concept", "Concept Year"), ("Prototype", "Prototype Year"), ("Commercial", "Commercial Year")]
 _STAGE_RANK = {"Concept": 0, "Prototype": 1, "Patent": 2, "Commercial": 3}
@@ -621,6 +753,11 @@ def build_data_notes(row, pat: pd.DataFrame) -> list:
 # ════════════════════════════════════════════════════════════════
 # DETAIL DIALOG
 # ════════════════════════════════════════════════════════════════
+# One-shot: pop() consumes the request, so it opens the dialog exactly once.
+# A persistent flag here was the bug — dismissing via Streamlit's own X or an
+# outside click never cleared it, so the next grid click reopened the dialog.
+# Widgets inside a dialog rerun only the dialog itself, so it stays open
+# while the user interacts with it.
 _open_view = st.session_state.pop("_pending_view", None)
 
 if _open_view is not None and _open_view[0] == "detail":
@@ -756,7 +893,7 @@ if _open_view is not None and _open_view[0] == "detail":
             pat_display = pat[["patent_year", "patent_number"]].copy()
             pat_display["patent_year"] = pat_display["patent_year"].astype("Int64")
             st.dataframe(pat_display.rename(columns={"patent_year": "Year", "patent_number": "Number"}),
-                         hide_index=True, use_container_width=True)
+                         hide_index=True)
 
         # ── Origin ─────────────────────────────────────────────
         origin = [
