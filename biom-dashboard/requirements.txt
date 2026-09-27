@@ -1,7 +1,9 @@
-streamlit>=1.58.0
-pandas>=2.0
-plotly>=5.18
-numpy>=1.26
-pyarrow>=14.0          # parquet engine
-openpyxl>=3.1         
-streamlit-aggrid>=1.0.5
+# Data cleaning / geocoding / validation
+pandas==3.0.2
+openpyxl==3.1.5          # pandas needs it to read the raw .xlsx
+pycountry==26.2.16       # geocode_countries.py
+ 
+# Dashboard (app.py)
+streamlit==1.64.0
+streamlit-aggrid==1.2.1.post2
+plotly==7.1.0
