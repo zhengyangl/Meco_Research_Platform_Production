@@ -1,4 +1,10 @@
-"""BioM Innovation Database — dashboard over the cleaned 5-table dataset."""
+"""
+BioM Innovation Database: Streamlit dashboard over the cleaned five-table dataset.
+
+Reads the CSVs in data/clean/ and provides global filters and search, a selectable
+case table with zip export, per-case detail and side-by-side compare dialogs, and
+an Explore tab (taxonomy sunburst, charts, country map).
+"""
 
 import html
 import logging
@@ -79,6 +85,7 @@ st.markdown("""
 
 @st.cache_data
 def load_data():
+    """Load the five cleaned CSV tables from DATA_DIR."""
     cases = pd.read_csv(DATA_DIR / "cases.csv")
     disciplines = pd.read_csv(DATA_DIR / "case_disciplines.csv")
     keywords = pd.read_csv(DATA_DIR / "case_keywords.csv")
@@ -104,9 +111,8 @@ KINGDOM_COLORS = {
 COMPARE_MIN, COMPARE_MAX = 2, 4
 VERIFIED_STATUS = "Complete, with interview"
 
-# AgGrid renders inside its own iframe, so page CSS variables (var(--teal) etc.)
-# don't reach it. Colours are set through ag-Grid's Theming API instead,
-# using literal hex values that mirror the :root palette above.
+# AgGrid renders in its own iframe where page CSS variables don't apply, so the
+# theme uses literal hex values mirroring the :root palette above.
 GRID_THEME = StAggridTheme(base="alpine").withParams(
     accentColor="#1D9E75",                 # checkboxes, focus ring  (--teal)
     foregroundColor="#1E2D24",             # cell text               (--charcoal)
@@ -122,9 +128,7 @@ GRID_THEME = StAggridTheme(base="alpine").withParams(
     headerColumnBorder=False,
 )
 
-# ════════════════════════════════════════════════════════════════
-# STATE
-# ════════════════════════════════════════════════════════════════
+# State
 for key, default in [
     ("search", ""), ("f_kingdom", []), ("f_phase", []), ("f_continent", []),
     ("f_discipline", []), ("f_service", []), ("f_year_range", None),
@@ -149,16 +153,16 @@ def clear_filters():
     st.session_state.f_year_range = (_year_min, _year_max)
 
 
-# ════════════════════════════════════════════════════════════════
-# CROSS-TABLE FILTERING
-# ════════════════════════════════════════════════════════════════
+# Cross-table filtering
 def case_ids_matching(child_df: pd.DataFrame, value_col: str, selected: list) -> set:
+    """Return case_ids with a child row in `selected`; None when nothing is selected."""
     if not selected:
         return None
     return set(child_df.loc[child_df[value_col].isin(selected), "case_id"])
 
 
 def intersect(a, b):
+    """Intersect two optional id sets; None means no constraint."""
     if a is None:
         return b
     if b is None:
@@ -167,6 +171,7 @@ def intersect(a, b):
 
 
 def get_filtered_cases() -> pd.DataFrame:
+    """Apply session-state filters and search to cases_all; cases without a Concept Year pass the year range."""
     df = cases_all
 
     allowed_ids = None
@@ -197,9 +202,7 @@ def get_filtered_cases() -> pd.DataFrame:
     return df
 
 
-# ════════════════════════════════════════════════════════════════
-# HERO
-# ════════════════════════════════════════════════════════════════
+# Hero
 st.markdown(
     f"""
     <div class="hero-box">
@@ -234,9 +237,7 @@ def active_filter_summary() -> list:
 
 
 def render_empty_state(key: str):
-    """One consistent panel for 'filters matched nothing', shown in each tab
-    instead of per-chart 'no data' captions. `key` keeps the button unique,
-    since both tabs are rendered on every run."""
+    """Show the 'no cases match' panel; `key` keeps the button unique across tabs."""
     summary = active_filter_summary()
     joined = html.escape(" \u00b7 ".join(summary))
     filters_html = f'<div class="es-filters">Active: {joined}</div>' if summary else ""
@@ -251,19 +252,16 @@ def render_empty_state(key: str):
         _m.button("Clear all filters", key=f"empty_clear_{key}", on_click=clear_filters, width="stretch")
 
 
-# Computed from session_state BEFORE the filter widgets are drawn below, so the
-# metrics can sit above the filter bar. This is safe: a keyed widget's new value
-# is written to session_state before the rerun it triggers begins.
+# Computed before the filter widgets are drawn so the metrics can sit above them;
+# a keyed widget's new value is already in session_state when its rerun starts.
 filtered = get_filtered_cases()
 
-# ════════════════════════════════════════════════════════════════
-# METRICS
-# ════════════════════════════════════════════════════════════════
+# Metrics
 def _count_countries(df: pd.DataFrame) -> int:
-    """Same rule as the map (build_country_counts): distinct country_iso3 among
-    rows with a Country, so spelling variants ("USA" / "United States") count
-    once and ungeocoded values are left out of both. Falls back to raw Country
-    only if geocode_countries.py hasn't been run (the map is hidden then)."""
+    """Distinct country_iso3 among rows with a Country, as in build_country_counts.
+
+    Falls back to raw Country when the country_iso3 column is absent.
+    """
     if "country_iso3" not in df.columns:
         return df["Country"].nunique()
     return df.loc[df["Country"].notna(), "country_iso3"].nunique()
@@ -278,8 +276,7 @@ def _metric_values(df: pd.DataFrame) -> list:
     ]
 
 
-# With filters active, each card also shows the unfiltered total ("of 510"),
-# so a filtered number is never mistaken for the database-wide figure.
+# With filters active, each card also shows the unfiltered total.
 _filters_on = count_active_filters() > 0
 for _col, (_label, _val), (_, _total) in zip(st.columns(4), _metric_values(filtered), _metric_values(cases_all)):
     _sub = f"of {_total:,}" if _filters_on else "&nbsp;"
@@ -289,11 +286,7 @@ for _col, (_label, _val), (_, _total) in zip(st.columns(4), _metric_values(filte
         unsafe_allow_html=True,
     )
 
-# ════════════════════════════════════════════════════════════════
-# FILTER BAR — directly above the table it controls
-# ════════════════════════════════════════════════════════════════
-# Active filters are visible without opening anything: each popover button's
-# label shows its selection count, and hovering it lists the chosen values.
+# Filter bar
 _n_active = count_active_filters()
 with st.container(border=True):
     _s_col, _n_col, _c_col = st.columns([6, 1.4, 1.2], vertical_alignment="center")
@@ -305,10 +298,8 @@ with st.container(border=True):
     with _c_col:
         st.button("Clear all", on_click=clear_filters, disabled=(_n_active == 0), width="stretch")
 
-    # Each filter lives in a fixed-height popover button instead of an inline
-    # multiselect: an inline multiselect grows taller with every selected tag,
-    # which made the whole bar uneven. The button label carries the selection
-    # count and the hover tooltip lists the chosen values.
+    # Popover buttons keep the bar at a fixed height (an inline multiselect grows with
+    # each selected tag); the label shows the selection count, the tooltip the values.
     _popover_filters = [
         ("Kingdom", "f_kingdom", sorted(cases_all["Kingdom"].dropna().unique())),
         ("Product Phase", "f_phase", sorted(cases_all["Product Phase"].dropna().unique())),
@@ -329,21 +320,17 @@ with st.container(border=True):
         with st.popover(f"Concept Year · {_lo}–{_hi}" if _yr_changed else "Concept Year", width="stretch"):
             st.slider("Concept Year", min_value=_year_min, max_value=_year_max, key="f_year_range")
 
-# ════════════════════════════════════════════════════════════════
-# TABS — Cases | Explore (the filter bar above applies to both)
-# ════════════════════════════════════════════════════════════════
+# Tabs (the filter bar applies to both)
 tab_cases, tab_explore = st.tabs(["Cases", "Explore"])
 
 with tab_cases:
-    # ════════════════════════════════════════════════════════════════
-    # TABLE + DOWNLOAD
-    # ════════════════════════════════════════════════════════════════
     _table_header_col, _download_col = st.columns([5, 1])
     with _table_header_col:
         st.markdown(f'<div class="section-title">Innovation Cases ({len(filtered):,} results)</div>', unsafe_allow_html=True)
 
 
     def build_download_zip(filtered_df: pd.DataFrame) -> bytes:
+        """Zip the five tables restricted to the cases in filtered_df."""
         ids = set(filtered_df["case_id"])
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -386,11 +373,8 @@ with tab_cases:
             format_func=lambda x: _HIDEABLE_COLS[x],
         )
 
-        # Default sort: rows with a real Product Name first, rows relying on
-        # the display_name fallback (Mimic-derived or "Untitled case") last.
-        # has_real_name must come from "Product Name" itself, not display_name
-        # — display_name is never blank (it always holds either the real name
-        # or a fallback), so it can't be used to tell the two cases apart.
+        # Rows with a real Product Name sort first; display_name is never blank, so it
+        # cannot be used to tell them apart.
         sort_df = filtered.copy()
         sort_df["_has_real_name"] = sort_df["Product Name"].notna()
         sort_df = sort_df.sort_values("_has_real_name", ascending=False)
@@ -399,10 +383,8 @@ with tab_cases:
             "display_name": "Case", "Concept Year_year": "Concept Yr", "Commercial Year_year": "Commercial Yr",
         })
 
-        # Matches Explorer's approach exactly: cellStyle returns a JS style
-        # object, which ag-grid applies natively — cellRenderer returning an
-        # HTML string does NOT get interpreted as HTML by default and shows
-        # as literal text instead.
+        # cellStyle returns a style object that ag-grid applies natively; a cellRenderer
+        # returning an HTML string would be shown as literal text.
         phase_style = JsCode("""
         function(params) {
             if (params.value === 'Commercially Available') {
@@ -424,12 +406,9 @@ with tab_cases:
         gb = GridOptionsBuilder.from_dataframe(table_df)
         gb.configure_selection("multiple", use_checkbox=True, header_checkbox=True,
                                suppressRowClickSelection=True)
-        # Matches Explorer's own pattern exactly: a single tooltipValueGetter
-        # on the default column config shows the full cell value on hover for
-        # every column, without needing tooltipField set individually on each
-        # one. filter=False removes the per-column funnel icon — the filter bar
-        # above the table is the filtering mechanism here (it also drives the
-        # metrics and exports, which per-column grid filters would not).
+        # One default tooltipValueGetter shows the full cell value on every column.
+        # filter=False: the filter bar also drives the metrics and exports, which
+        # per-column grid filters would not.
         gb.configure_default_column(
             resizable=True, sortable=True, filter=False,
             tooltipValueGetter=JsCode("function(params) { return params.value; }"),
@@ -448,9 +427,7 @@ with tab_cases:
             theme=GRID_THEME, update_on=["selectionChanged"], fit_columns_on_grid_load=False,
             custom_css={
                 ".ag-header-cell-label": {"justify-content": "center"},
-                # Excludes ag-grid's own right-aligned numeric-cell class, so
-                # case_id / Concept Yr / Commercial Yr keep their natural
-                # right alignment while every other (text) column goes left.
+                # Left-align text columns; numeric cells keep ag-grid's right alignment.
                 ".ag-cell:not(.ag-right-aligned-cell)": {"text-align": "left", "justify-content": "flex-start"},
             },
         )
@@ -487,15 +464,12 @@ with tab_cases:
         if n_selected > COMPARE_MAX:
             st.caption(f"Compare supports up to {COMPARE_MAX} cases — {n_selected} are currently selected.")
 
-# ════════════════════════════════════════════════════════════════
-# EXPLORE TAB — taxonomy explorer + charts
-# ════════════════════════════════════════════════════════════════
+# Explore tab
 _TAXON_LEVELS = ["Kingdom", "Group", "Phylum"]
 _UNRECORDED = "(not recorded)"
 
-# Map colour classes. Binned rather than a continuous scale: with one country
-# far ahead of the rest, a linear scale paints every other country almost the
-# same pale shade. Each class is a readable range in the legend.
+# Map colour classes. Binned because with one country far ahead, a linear scale
+# paints all other countries almost the same pale shade.
 _MAP_BINS = [(1, 1, "1"), (2, 4, "2–4"), (5, 14, "5–14"), (15, 49, "15–49"), (50, float("inf"), "50+")]
 _MAP_BIN_LABELS = [b[2] for b in _MAP_BINS]
 _MAP_BIN_COLORS = ["#CDEADD", "#8FD0B3", "#45A983", "#177A57", "#0A4430"]
@@ -507,18 +481,17 @@ def _map_bin(n: int) -> str:
 
 @st.cache_resource
 def _log_unmapped_once(unmapped: tuple):
-    """Logs each distinct set of ungeocoded values once per server process,
-    rather than on every rerun."""
+    """Log each distinct set of ungeocoded values once per server process."""
     log.warning("Country values with no geocode (excluded from map): %s. "
                 "Check them against COUNTRY_ALIASES in geocode_countries.py and re-run it.", list(unmapped))
 
 
 def build_country_counts(df: pd.DataFrame) -> pd.DataFrame:
     """Cases per country, largest first, with share and colour class.
-    Groups by country_iso3 ALONE — grouping by (iso3, raw Country) was an
-    earlier bug: different spellings of one country ("USA" / "U.S.A.") became
-    separate rows and split that country's count. country_name_canonical (one
-    fixed name per iso3, from geocode_countries.py) is the display name."""
+
+    Groups by country_iso3 only, so spelling variants of a country count together;
+    country_name_canonical is the display name.
+    """
     geo = df[df["Country"].notna() & df["country_iso3"].notna()]
     counts = (
         geo.groupby("country_iso3")
@@ -533,9 +506,11 @@ def build_country_counts(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_taxonomy_frame(df: pd.DataFrame) -> pd.DataFrame:
-    """One row per case with Kingdom/Group/Phylum. Blank levels become
-    '(not recorded)' rather than being dropped: the sunburst cannot take a gap
-    mid-path, and dropping those cases would make the counts silently not add up."""
+    """One row per case with Kingdom/Group/Phylum; blank levels become '(not recorded)'.
+
+    The sunburst cannot take a gap mid-path, and dropping those cases would make
+    the counts not add up.
+    """
     t = df[["case_id"] + _TAXON_LEVELS].copy()
     for c in _TAXON_LEVELS:
         t[c] = t[c].where(t[c].notna() & t[c].astype(str).str.strip().ne(""), _UNRECORDED)
@@ -545,8 +520,7 @@ def build_taxonomy_frame(df: pd.DataFrame) -> pd.DataFrame:
 def _level_select(label: str, key: str, frame: pd.DataFrame, col: str) -> pd.DataFrame:
     counts = frame[col].value_counts()
     options = ["All"] + counts.index.tolist()
-    # A global-filter change can remove the current choice; reset before the
-    # widget is drawn (setting a keyed widget's state is allowed at that point).
+    # A global-filter change can remove the current choice; reset it before the widget is drawn.
     if st.session_state.get(key) not in options:
         st.session_state[key] = "All"
     choice = st.selectbox(label, options, key=key,
@@ -685,18 +659,16 @@ with tab_explore:
                            f"unrecognised country name {'are' if _n_unmapped_cases != 1 else 'is'} not shown on the map.")
                 _log_unmapped_once(tuple(unmapped))
 
-# ════════════════════════════════════════════════════════════════
-# CASE PROFILE — content builders (pure functions, no rendering)
-# ════════════════════════════════════════════════════════════════
+# Case profile content builders (no rendering)
 _STAGES = [("Concept", "Concept Year"), ("Prototype", "Prototype Year"), ("Commercial", "Commercial Year")]
 _STAGE_RANK = {"Concept": 0, "Prototype": 1, "Patent": 2, "Commercial": 3}
 
 
 def build_timeline_events(row, pat: pd.DataFrame) -> list:
-    """Concept / Prototype / Commercial years plus patent years, sorted
-    chronologically. Ties keep the natural stage order. Patents sharing a
-    year are grouped into one event. Patents with no parsed year are left
-    off the timeline (they are reported in the data notes instead)."""
+    """Stage years plus patents (grouped by year), sorted by year then stage.
+
+    Patents without a parsed year are omitted; build_data_notes reports them.
+    """
     events = []
     for stage, field in _STAGES:
         year = row.get(f"{field}_year")
@@ -716,8 +688,7 @@ def build_timeline_events(row, pat: pd.DataFrame) -> list:
 
 
 def build_data_notes(row, pat: pd.DataFrame) -> list:
-    """Plain-language notes on data quality for one case, derived only from
-    fields that actually exist — nothing inferred."""
+    """Plain-language data-quality notes for one case, from existing fields only."""
     notes = []
     if pd.isna(row.get("Product Name")):
         notes.append("No product name was recorded for this case; the title shown is a placeholder.")
@@ -750,14 +721,9 @@ def build_data_notes(row, pat: pd.DataFrame) -> list:
     return notes
 
 
-# ════════════════════════════════════════════════════════════════
-# DETAIL DIALOG
-# ════════════════════════════════════════════════════════════════
-# One-shot: pop() consumes the request, so it opens the dialog exactly once.
-# A persistent flag here was the bug — dismissing via Streamlit's own X or an
-# outside click never cleared it, so the next grid click reopened the dialog.
-# Widgets inside a dialog rerun only the dialog itself, so it stays open
-# while the user interacts with it.
+# Detail dialog
+# pop() consumes the request so the dialog opens once; a persistent flag would
+# reopen it after dismissal via the dialog's X or an outside click.
 _open_view = st.session_state.pop("_pending_view", None)
 
 if _open_view is not None and _open_view[0] == "detail":
@@ -782,8 +748,7 @@ if _open_view is not None and _open_view[0] == "detail":
             return "".join(f'<span class="pill">{esc(v)}</span>' for v in values)
 
         def _kv_grid(pairs, columns=2):
-            """Blank fields are skipped entirely (pd.notna, not truthiness —
-            NaN is truthy in Python), so no 'nan' or '—' placeholders."""
+            """Render non-blank (label, value) pairs as a grid; blanks are skipped."""
             items = [(l, v) for l, v in pairs if _present(v)]
             if not items:
                 return
@@ -798,7 +763,7 @@ if _open_view is not None and _open_view[0] == "detail":
                 unsafe_allow_html=True,
             )
 
-        # ── Header ─────────────────────────────────────────────
+        # Header
         subtitle = " · ".join(p for p in [esc(row["Mimic"]) if _present(row.get("Mimic")) else "", f"case_id {case_id}"] if p)
         phase = row.get("Product Phase")
         phase_cls = {"Commercially Available": "badge-teal", "In Development": "badge-amber"}.get(phase, "badge-gray")
@@ -817,7 +782,7 @@ if _open_view is not None and _open_view[0] == "detail":
         if _present(row.get("Product Description")):
             st.caption(row["Product Description"])
 
-        # ── Biological Inspiration ─────────────────────────────
+        # Biological Inspiration
         chain = [row.get(c) for c in ["Kingdom", "Group", "Phylum"] if _present(row.get(c))]
         levels = [(c.replace("Mimic ", ""), row.get(c)) for c in ["Mimic Subsystem", "Mimic System", "Mimic Suprasystem"]]
         if chain or any(_present(v) for _, v in levels):
@@ -830,7 +795,7 @@ if _open_view is not None and _open_view[0] == "detail":
                 )
             _kv_grid(levels, columns=3)
 
-        # ── Innovation ─────────────────────────────────────────
+        # Innovation
         biom_tags = [c for c in ["Function", "Form", "Process", "Interaction"] if row.get(f"biom_type_{c.lower()}") is True]
         if biom_tags or _present(row.get("Process Type")):
             _section("Innovation")
@@ -839,7 +804,7 @@ if _open_view is not None and _open_view[0] == "detail":
                             + _pills(biom_tags), unsafe_allow_html=True)
             _kv_grid([("Process Type", row.get("Process Type"))], columns=1)
 
-        # ── Innovation Journey ─────────────────────────────────
+        # Innovation Journey
         events = build_timeline_events(row, pat)
         if events:
             _section("Innovation Journey")
@@ -865,7 +830,7 @@ if _open_view is not None and _open_view[0] == "detail":
                 unsafe_allow_html=True,
             )
 
-        # ── Services, disciplines, keywords ────────────────────
+        # Services, disciplines, keywords
         svc = services_all.loc[services_all["case_id"] == case_id, "ecosystem_service"].dropna().tolist()
         if svc:
             _section("Ecosystem Services")
@@ -887,7 +852,7 @@ if _open_view is not None and _open_view[0] == "detail":
                 st.markdown('<span style="font-size:12px;color:var(--muted);margin-right:6px;">Patent</span>'
                             + _pills(pat_kw), unsafe_allow_html=True)
 
-        # ── Patents (numbers live here; years are on the timeline) ─
+        # Patents (numbers here; years are on the timeline)
         if len(pat):
             _section("Patents")
             pat_display = pat[["patent_year", "patent_number"]].copy()
@@ -895,7 +860,7 @@ if _open_view is not None and _open_view[0] == "detail":
             st.dataframe(pat_display.rename(columns={"patent_year": "Year", "patent_number": "Number"}),
                          hide_index=True)
 
-        # ── Origin ─────────────────────────────────────────────
+        # Origin
         origin = [
             ("Institution", row.get("Company or Institution Name")), ("Country", row.get("Country")),
             ("Academia / Industry", row.get("Academia or Industry")), ("Continent", row.get("Continent")),
@@ -904,7 +869,7 @@ if _open_view is not None and _open_view[0] == "detail":
             _section("Origin")
             _kv_grid(origin)
 
-        # ── Data notes ─────────────────────────────────────────
+        # Data notes
         notes = build_data_notes(row, pat)
         if notes:
             _section("Data notes")
@@ -923,9 +888,7 @@ if _open_view is not None and _open_view[0] == "detail":
 
     show_detail(_open_view[1])
 
-# ════════════════════════════════════════════════════════════════
-# COMPARE DIALOG
-# ════════════════════════════════════════════════════════════════
+# Compare dialog
 _MISSING = "—"
 
 
@@ -956,10 +919,10 @@ def _fmt_verified(row) -> str:
 
 
 def build_compare_rows(case_ids: list) -> tuple:
-    """Returns (column headers, [(label, [value per case])]). Every row keeps
-    one cell per case — missing values render as '—' rather than being
-    dropped, so the columns stay aligned (the opposite of the detail view,
-    where blank fields are skipped entirely)."""
+    """Return (headers, rows): headers are (display_name, case_id); rows are (label, value per case).
+
+    Missing values render as '—' so columns stay aligned.
+    """
     rows = [cases_all[cases_all["case_id"] == cid].iloc[0] for cid in case_ids]
     headers = [(str(r["display_name"]), int(r["case_id"])) for r in rows]
 
