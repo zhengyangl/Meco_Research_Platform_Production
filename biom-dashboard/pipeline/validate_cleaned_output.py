@@ -1,17 +1,12 @@
 """
-validate_cleaned_output.py — Structural validation for clean_biom_data's
-output tables (cases.csv + the 4 child tables).
+validate_cleaned_output.py — Structural validation of clean_biom_data's output
+tables (cases.csv and the four child tables).
 
-Run this AFTER the cleaning pipeline, pointing it at the same
-input file and output directory, to confirm the tables are internally
-consistent — row count preserved, no duplicate IDs, every child-table
-case_id resolves to a real case, and the column-count change is
-explainable — before trusting them for a database ingest or dashboard
-build.
-
-This does NOT re-run any cleaning logic. It only reads the already-
-written CSVs and cross-checks them against each other and against the
-original Excel file.
+Run after the cleaning pipeline with the same input file and output directory.
+Checks that the row count matches the source, case_id values are present and
+unique, every child-table case_id exists in cases.csv, and prints a column-count
+breakdown for manual review. Does not re-run any cleaning logic; it only reads
+the written CSVs and the original Excel file.
 
 Usage:
     python validate_cleaned_output.py --input "BIOM DATABASE FULL.xlsx" --output-dir clean_output
@@ -24,9 +19,10 @@ import pandas as pd
 
 
 def check_row_count(input_path: Path, cases_df: pd.DataFrame) -> list:
+    """Compare non-blank source rows with cases.csv rows."""
     issues = []
     raw = pd.read_excel(input_path, keep_default_na=False, na_values=[""])
-    raw = raw.dropna(how="all")  # a fully-blank trailing row (seen before in this data) isn't a real case
+    raw = raw.dropna(how="all")  # fully blank rows are not cases
     n_raw, n_cases = len(raw), len(cases_df)
     if n_raw != n_cases:
         issues.append(
@@ -40,6 +36,7 @@ def check_row_count(input_path: Path, cases_df: pd.DataFrame) -> list:
 
 
 def check_case_id_uniqueness(cases_df: pd.DataFrame) -> list:
+    """Report a missing case_id column, missing (NaN) IDs, and duplicate IDs in cases.csv."""
     issues = []
     if "case_id" not in cases_df.columns:
         return ["cases.csv has no 'case_id' column at all — can't run any of the ID-based checks."]
@@ -47,10 +44,8 @@ def check_case_id_uniqueness(cases_df: pd.DataFrame) -> list:
     missing = cases_df["case_id"].isna()
     n_missing = int(missing.sum())
     if n_missing:
-        # A missing case_id is a distinct, arguably worse problem than a
-        # duplicate: nunique() doesn't count it, and a single NaN isn't
-        # flagged by duplicated() either, so this can silently slip past
-        # a naive "any duplicates?" check the way it did here.
+        # Reported separately: nunique() skips NaN and a lone NaN is not
+        # flagged by duplicated().
         missing_rows = cases_df.index[missing].tolist()
         issues.append(
             f"{n_missing} row(s) in cases.csv have a missing/blank case_id "
@@ -68,13 +63,10 @@ def check_case_id_uniqueness(cases_df: pd.DataFrame) -> list:
 
 
 def check_referential_integrity(cases_df: pd.DataFrame, child_tables: dict) -> list:
-    """Every case_id in a child table must exist in cases.csv. An orphan
-    case_id — one with no matching parent row — is a strong signal that
-    something got misaligned somewhere between extraction and output,
-    even if every individual table looked fine on its own."""
+    """Report child-table case_id values that have no matching row in cases.csv."""
     issues = []
     if "case_id" not in cases_df.columns:
-        return issues  # already reported above
+        return issues  # reported by check_case_id_uniqueness
     valid_ids = set(cases_df["case_id"])
     for name, child_df in child_tables.items():
         if len(child_df) == 0:
@@ -99,10 +91,7 @@ def check_referential_integrity(cases_df: pd.DataFrame, child_tables: dict) -> l
 
 
 def check_column_reconciliation(input_path: Path, cases_df: pd.DataFrame) -> list:
-    """Informational, not a hard pass/fail — the exact expected column
-    count depends on several moving pieces that change as the exclusion
-    lists evolve. Prints a breakdown so it can be sanity-checked by eye
-    rather than trusted as a single opaque number."""
+    """Print raw vs. cases.csv column counts with expected adjustments; never reports issues."""
     raw = pd.read_excel(input_path, keep_default_na=False, na_values=[""])
     n_raw_cols, n_cases_cols = len(raw.columns), len(cases_df.columns)
 
