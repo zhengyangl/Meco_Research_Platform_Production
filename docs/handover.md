@@ -10,6 +10,8 @@ This is the day-to-day operating manual. For one-time setup (AWS, database, cred
 
 This platform classifies bio-inspired research papers against 22 ecosystem services, using an LLM, and shows the results on a Streamlit dashboard. New papers flow in through Google Drive, get classified, and — depending on how confident the model is — either go straight into the database or get checked by a person first. Full detail on all of this is in `architecture.md`; this document assumes you've read it.
 
+The repository also contains a second, independent platform: the BioM Innovation Database dashboard in `biom-dashboard/` (510 cases, built from CSV files, no database or Google resources). Everything in Sections 2–9 below is about the MEco platform unless stated otherwise; BioM's operation is covered in Section 3.1, and its data pipeline is documented in `biom-dashboard/docs/data_cleaning_notes.md`.
+
 ---
 
 ## 2. The three Google resources, at a glance
@@ -49,14 +51,22 @@ The Explorer itself needs no manual step — it queries the database directly an
 
 ### 3.1 If self-hosted on EC2 (see environment_setup.md Section 11)
 
-Once the dashboard moves off Streamlit Community Cloud, both apps run as systemd services instead of ad-hoc `streamlit run` commands:
+Once the dashboards move off Streamlit Community Cloud, they run as two systemd services instead of ad-hoc `streamlit run` commands:
+
+| Service | What it serves |
+|---|---|
+| `meco-dashboard` | MEco narrative page and Data Explorer (one Streamlit app) |
+| `biom-dashboard` | BioM Innovation Database |
 
 ```bash
-sudo systemctl status meco-narrative      # check if running
-sudo systemctl restart meco-narrative     # restart after a code update
-sudo journalctl -u meco-narrative -f      # tail live logs
+sudo systemctl status meco-dashboard      # check if running
+sudo systemctl restart meco-dashboard     # restart after a code update or .env change
+sudo journalctl -u meco-dashboard -f      # tail live logs
 ```
-Same commands apply to `meco-explorer`. This is not yet the current setup — see Section 9.
+
+The same commands apply to `biom-dashboard`. After pulling new code (`cd ~/meco_dashboard && git pull`), restart whichever service the change affects. This is not yet the current setup — see Section 9.
+
+**Updating the BioM data.** The BioM dashboard reads only the CSV files in `biom-dashboard/data/clean/`. To rebuild them from a new Excel export, run the three scripts in `biom-dashboard/pipeline/` from that folder, in this order: `clean_biom_data.py`, `geocode_countries.py`, `validate_cleaned_output.py` (details in `biom-dashboard/docs/data_cleaning_notes.md`). Commit the updated CSVs, `git pull` on the server, and `sudo systemctl restart biom-dashboard`.
 
 ---
 
@@ -148,7 +158,7 @@ exit
 scp -i ~/Downloads/my-aws-key.pem ubuntu@<SERVER_PUBLIC_IP>:~/dashboard_data/corpus_meta.json ~/Desktop/meco_dashboard/dashboard_data/
 ```
 
-If you use this to test a change to a pipeline script, remember to also upload the finished version to wherever `run_pipeline.py` expects to find it (see `pipeline/` in the repo layout) once you're done testing — otherwise the automated pipeline keeps running the old version.
+If you use this to test a change to a pipeline script, remember to also commit the finished version to the repository and run `git pull` in `~/meco_dashboard` on the server once you're done testing — otherwise the automated pipeline keeps running the old version. Avoid editing files inside `~/meco_dashboard` directly on the server, since that makes the next `git pull` conflict.
 
 ---
 
@@ -159,8 +169,9 @@ Real issues hit while building and testing this pipeline, in case they come up a
 | Symptom | Cause | Fix |
 |---|---|---|
 | `bash: export: '=': not a valid identifier` | Spaces around the `=` in an `export` command | `export VAR=value`, no spaces. `export VAR = value` is three separate tokens, not an assignment. |
-| `OSError: DATABASE_URL is not set` | Env var not exported in the current shell session, or exported in a different session than the one running the script | Re-run the `export DATABASE_URL=...` command in the same terminal session you're running the script from. Exported variables don't persist across new SSH connections or new terminal windows. |
-| `EnvironmentError: GOOGLE_SERVICE_ACCOUNT_FILE is not set` | Same as above, for the Google credentials path | Same fix — re-export it, or add it to `~/.bashrc` if you want it to persist automatically on every login. |
+| `OSError: DATABASE_URL is not set` | Env var not exported in the current shell session, or exported in a different session than the one running the script | Load the server's `.env` file in the same terminal session you're running the script from: `set -a; source ~/meco_dashboard/.env; set +a`. Exported variables don't persist across new SSH connections or new terminal windows. (The systemd service reads `.env` itself, so this only affects scripts you run by hand.) |
+| `EnvironmentError: GOOGLE_SERVICE_ACCOUNT_FILE is not set` | Same as above, for the Google credentials path | Same fix — load `.env` as above, and check that `GOOGLE_SERVICE_ACCOUNT_FILE` in it points at the real JSON file. |
+| Changed `.env` or pulled new code, but the dashboard still behaves the old way | The Streamlit services only read `.env` and the code at startup | `sudo systemctl restart meco-dashboard` (or `biom-dashboard`) |
 | Drive/Sheets calls fail with a permissions error | The resource (Sheet or Drive folder) hasn't been individually shared with the service account's email | Open the resource, click Share, add the `client_email` from the service account's JSON key as Editor. Being the same account used elsewhere does not carry over automatically — see Section 2 above. |
 | `pip install` fails with a disk-related error even though `df -h` shows plenty of free space | `/tmp` is a small tmpfs (RAM-backed), not the main disk — large packages like `torch` don't fit there even when the real disk has room | `mkdir -p ~/pip_tmp && export TMPDIR=~/pip_tmp` before installing. Full detail in `environment_setup.md` Section 5. |
 | `UserWarning: pandas only supports SQLAlchemy connectable...` when using `pd.read_sql` with a raw `psycopg2` connection | Harmless — pandas prefers a SQLAlchemy engine but works fine with a plain `psycopg2` connection too | Safe to ignore. |
@@ -173,15 +184,16 @@ Real issues hit while building and testing this pipeline, in case they come up a
 
 **Database password:**
 1. Connect as `pipeline_user` or the `postgres` superuser and run: `ALTER USER pipeline_user WITH PASSWORD 'new_password';`
-2. Update `DATABASE_URL` everywhere it's set (server environment, any local `.env` files used for the SSH-tunnel workflow in Section 4.2).
+2. Update `DATABASE_URL` everywhere it's set (`~/meco_dashboard/.env` on the server, any local `.env` files used for the SSH-tunnel workflow in Section 4.2).
+3. Run `sudo systemctl restart meco-dashboard` so the Explorer picks up the new password.
 
 **OpenRouter key:**
 1. Go to [openrouter.ai/keys](https://openrouter.ai/keys), delete the old key.
-2. Create a new one, update `OPENROUTER_API_KEY`.
+2. Create a new one, update `OPENROUTER_API_KEY` in `~/meco_dashboard/.env`. No service restart is needed — only `classify.py` uses it, and it is run by hand or by the pipeline, not by the Streamlit services.
 
 **Google service account key:**
 1. In the Google Cloud Console, go to the service account → Keys → Add Key → Create new key (JSON) — this creates a new key without invalidating the old one yet.
-2. Upload the new JSON file to the server, update `GOOGLE_SERVICE_ACCOUNT_FILE` to point at it, and update `.streamlit/secrets.toml` for `explorer.py`.
+2. Upload the new JSON file to the server, update `GOOGLE_SERVICE_ACCOUNT_FILE` to point at it, and update `.streamlit/secrets.toml` for `explorer.py`, then run `sudo systemctl restart meco-dashboard`.
 3. Confirm everything still works (see the verification checklist in `environment_setup.md`).
 4. Only then go back and delete the old key from the Cloud Console.
 5. Note: the `client_email` doesn't change when you rotate a key, so you do **not** need to re-share any Sheets or Drive folders — they're shared with the account, not the specific key.
@@ -207,4 +219,4 @@ Real issues hit while building and testing this pipeline, in case they come up a
 - **`cluster_technologies()`'s low-confidence assignments aren't blocked, only logged.** A new paper with a technology phrase that doesn't closely resemble any of the 25 existing clusters still gets force-assigned to the nearest one. If the "low confidence" count in a run's output starts looking large, that's a signal the 25 clusters may need revisiting (see `data_dictionary.md` Section 7) — the pipeline won't decide that on its own.
 - **The full `new-data` chain hasn't been run end-to-end against real new papers in production yet.** Drive detection has been confirmed working. The individual pieces (`classify.py`, `ingest_incremental.py`, `text_analysis.py`) have each been tested separately, and `cluster_technologies()` specifically has been run for real against the live database (successfully recomputed centroids from 35,433 labeled papers). But the full chain — a real new file, classified, auto-ingested, and features extracted, all through `run_pipeline.py new-data` without `--dry-run` — has not yet been exercised together. Do this as an early test with a small batch before relying on it for anything real.
 - **The Feedback Sheet ID in Section 2 needs confirming.** It's carried over from project notes rather than freshly verified against `explorer.py`'s actual configuration.
-- - **The dashboard is still hosted on Streamlit Community Cloud, not the self-hosted EC2 + nginx setup described in `environment_setup.md` Section 11.** That migration is planned — motivated by removing Streamlit's free-tier branding icons for a cleaner embed into the ME website — but hasn't been executed yet. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
+- **The dashboard is still hosted on Streamlit Community Cloud, not the self-hosted EC2 + nginx setup described in `environment_setup.md` Section 11.** That migration is planned — motivated by removing Streamlit's free-tier branding icons for a cleaner embed into the ME website — but hasn't been executed yet. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
