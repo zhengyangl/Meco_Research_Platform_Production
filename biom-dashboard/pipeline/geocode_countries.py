@@ -1,12 +1,12 @@
 """
-geocode_countries.py — Adds standardized geographic codes to cases.csv.
+geocode_countries.py — Add standardized country codes to cases.csv.
 
-Runs as a second stage after clean_biom_data.py. Country and Continent are
-kept as-is (they're already clean, whitelist-validated fields); this adds
-two new columns so app.py never needs to do country-name matching itself:
+Second pipeline stage, run after clean_biom_data.py. Resolves each distinct
+Country value to an ISO 3166-1 code via an alias table and pycountry fuzzy
+search, and appends two columns (existing columns are unchanged):
 
     country_iso3            ISO 3166-1 alpha-3 code (e.g. "USA"), blank if unmatched
-    country_name_canonical  pycountry's official name (e.g. "United States"), blank if unmatched
+    country_name_canonical  pycountry's name for that code, blank if unmatched
 
 Usage:
     python geocode_countries.py --input data/clean/cases.csv
@@ -19,9 +19,8 @@ from pathlib import Path
 import pandas as pd
 import pycountry
 
-# Variants pycountry's fuzzy matcher doesn't reliably resolve on its own.
-# Not exhaustive — anything else falls through to the unmapped list printed
-# at the end, rather than being silently dropped.
+# Lower-cased variants mapped to alpha-3 codes, checked before pycountry's
+# fuzzy search. Values that match neither are reported as unmapped.
 COUNTRY_ALIASES = {
     "usa": "USA", "u.s.a.": "USA", "u.s.": "USA", "united states": "USA",
     "uk": "GBR", "u.k.": "GBR", "great britain": "GBR",
@@ -31,7 +30,7 @@ COUNTRY_ALIASES = {
 
 
 def resolve_country(raw: str):
-    """Returns (iso3_code, canonical_name), both None if unmatched."""
+    """Return (iso3_code, canonical_name); both None if unmatched."""
     key = str(raw).strip().lower()
     if key in COUNTRY_ALIASES:
         code = COUNTRY_ALIASES[key]
@@ -45,6 +44,7 @@ def resolve_country(raw: str):
 
 
 def geocode_cases(df: pd.DataFrame) -> tuple:
+    """Return (copy of df with the two new columns, sorted list of unmatched Country values)."""
     unique_countries = df["Country"].dropna().unique()
     lookup = {c: resolve_country(c) for c in unique_countries}
 
