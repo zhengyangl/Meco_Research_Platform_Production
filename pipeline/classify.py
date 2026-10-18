@@ -1,33 +1,26 @@
 #!/usr/bin/env python
 """
-classify.py — Incremental Qwen-2.5-72B classification for new MEco corpus papers.
+classify.py - Incremental LLM (Qwen-2.5-72B via OpenRouter) classification of new papers.
 
-Pipeline position: runs AFTER new papers are detected/loaded (sources.py /
-run_pipeline.py Drive-detection step), and BEFORE database ingestion.
+Runs after new papers are loaded and before database ingestion. Each paper gets
+Decision, Category, EcosystemService, Technology, ReviewFlag and Confidence from
+SYSTEM_PROMPT. Routing by confidence:
+  - "high" confidence with a successful call and parse -> classified_auto_ingest.csv
+    (review_status = "auto_high_confidence").
+  - Everything else (medium, low, failed call, failed parse) -> classified_needs_review.csv
+    (review_status = "pending_human_review") and are pushed to the Google Sheet review
+    queue when its credentials are configured.
+  - --pull-reviewed reads rows a human has completed from the sheet and writes them to
+    classified_human_reviewed.csv (review_status = "human_reviewed") for ingestion
+    alongside the auto-ingest rows.
 
-Confidence-based routing (per Aug 2026 decision):
-  - Decision + Category + EcosystemService + Technology + ReviewFlag are all
-    produced by the same prompt used during model validation (unchanged).
-  - Rows the model reports as "high" confidence are written to
-    classified_auto_ingest.csv (review_status = "auto_high_confidence") and
-    are safe to pass straight to ingestion.
-  - Rows reported "medium" or "low" confidence — plus any row that failed the
-    API call or failed JSON parsing — are pushed to a dedicated Google Sheet
-    for human review. This is a SEPARATE spreadsheet from the crowd-sourced
-    "report a misclassification" sheet used by explorer.py — that one is for
-    published-data corrections, this one is a pre-ingestion QC queue. A local
-    CSV copy is always written too, as a redundant audit trail.
-  - Once a human has reviewed a row in the sheet, pull_reviewed_rows() reads
-    the confirmed/corrected rows back, tags them review_status =
-    "human_reviewed", and merges them into the SAME ingestion output as the
-    auto-ingest rows — one schema, one ingestion path, not two.
+The review sheet is separate from the misclassification report sheet used by explorer.py.
 
-Input columns: this script expects the RAW WoS export column names
-(e.g. "Article Title", "Author Keywords", "Abstract", "UT (Unique WOS ID)")
-and normalizes them internally — see WOS_COLUMN_ALIASES below.
+Input columns are raw WoS export names (e.g. "Article Title", "Author Keywords",
+"Abstract", "UT (Unique WOS ID)"); see WOS_COLUMN_ALIASES.
 
 Usage:
-    # Normal run
+    # Classify new papers
     export OPENROUTER_API_KEY="sk-or-v1-..."
     export GOOGLE_SERVICE_ACCOUNT_FILE="/path/to/service_account.json"
     export REVIEW_SHEET_ID="1AbC...xyz"
@@ -36,7 +29,7 @@ Usage:
     # Pull back rows a human has finished reviewing in the sheet
     python classify.py --pull-reviewed --output-dir output/
 
-    # Dry run: validates input file only, makes no API calls, writes nothing
+    # Dry run: validate the input file only; no API calls, nothing written
     python classify.py --input new_papers.csv --dry-run
 """
 
@@ -54,9 +47,6 @@ from tqdm import tqdm
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ----------------------------------------------------------------------
-# Config
-# ----------------------------------------------------------------------
 TARGET_MODEL = "qwen/qwen-2.5-72b-instruct"
 MAX_RETRIES = 5
 MAX_TOKENS = 512
@@ -64,10 +54,8 @@ TEMPERATURE = 0.1
 REQUEST_DELAY = 0.6  # seconds between calls
 MAX_RETRY_PASSES = 2  # how many extra full passes over failed rows
 
-# NOTE: prompt text is unchanged from the Task 0 validation script.
-# If this prompt is ever revised, bump the version string below and record
-# the change in docs/prompt_specification.md — classification_audit relies
-# on this version tag to know which prompt produced which row.
+# Bump when SYSTEM_PROMPT changes; classification_audit uses it to tell which prompt
+# produced a row. Record changes in docs/prompt_specification.md.
 PROMPT_VERSION = "v1_validation_baseline"
 
 SYSTEM_PROMPT = """ You are an Ecosystem Service expert and a dedicated assistant designed to classify research articles (titles, keywords, abstracts given) based on the following instructions:
@@ -139,9 +127,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("classify")
 
-# Internal name -> possible raw WoS export column name(s), first match wins.
-# Confirm these against an actual current WoS export before first production
-# run — export field names have occasionally drifted between WoS interfaces.
+# Internal column name -> raw WoS export column name(s); first match wins.
 WOS_COLUMN_ALIASES = {
     "wos_id": ["UT (Unique WOS ID)", "UT", "Unique WOS ID"],
     "title": ["Article Title"],
@@ -150,28 +136,16 @@ WOS_COLUMN_ALIASES = {
 }
 REQUIRED_INPUT_COLUMNS = {"wos_id", "title", "keywords", "abstract"}
 
-# Google Sheets — pre-ingestion human review queue.
-# Deliberately a DIFFERENT spreadsheet from the crowd-sourced misclassification
-# report sheet used in explorer.py. Same auth pattern (service account),
-# separate credentials env var so the two integrations can be rotated/scoped
-# independently.
 GOOGLE_SHEETS_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.file",
 ]
 REVIEW_SHEET_WORKSHEET = "needs_review"
-# Default review-queue spreadsheet (pre-ingestion QC, separate from the
-# crowd-sourced misclassification report sheet in explorer.py). Reuses the
-# SAME service account as that sheet (meco-explorer-feedback@mindful-origin-
-# 481219-u1.iam.gserviceaccount.com) — remember to share this sheet with that
-# email as Editor, since a service account has no access until explicitly
-# shared, even when it's the same account used elsewhere.
+# Used when REVIEW_SHEET_ID is unset. The sheet must be shared (Editor) with the
+# service account in use.
 DEFAULT_REVIEW_SHEET_ID = "15MvAFOnq7b0dGKqzQZPCTwxhSgJdGNmQn8YZFw8BleA"
-# raw_output is included so a human reviewer can see exactly what Qwen said,
-# and so it survives the round trip back into classification_audit
-# (raw_output JSONB) after review — that table doesn't have a place for
-# reviewer_notes/reviewed_by/reviewed_at, so the sheet itself remains the
-# permanent record of who reviewed what and when.
+# raw_output lets reviewers see the model's exact reply; reviewer_notes, reviewed_by
+# and reviewed_at exist only in the sheet (not in classification_audit).
 REVIEW_SHEET_COLUMNS = [
     "wos_id", "title", "decision", "category", "ecosystem_service", "technology",
     "review_flag", "confidence", "status", "prompt_version", "raw_output",
@@ -180,17 +154,8 @@ REVIEW_SHEET_COLUMNS = [
 ]
 
 
-# ----------------------------------------------------------------------
-# Client / API
-# ----------------------------------------------------------------------
 def get_client() -> OpenAI:
-    """
-    Build the OpenRouter client from an environment variable.
-
-    Every maintainer registers their own OpenRouter account and exports
-    their own key — never hardcode a key in this file or commit one to
-    Git. See docs/handover.md for the registration steps.
-    """
+    """Build the OpenRouter client using the OPENROUTER_API_KEY environment variable."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise EnvironmentError(
@@ -203,7 +168,7 @@ def get_client() -> OpenAI:
 
 
 def call_with_retry(client, model, system_prompt, content, max_retries=MAX_RETRIES):
-    """Single classification call with exponential backoff on failure."""
+    """Call the model once, retrying with exponential backoff; return (text, status)."""
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
@@ -233,11 +198,8 @@ def call_with_retry(client, model, system_prompt, content, max_retries=MAX_RETRI
                 return str(e), "Failed"
 
 
-# ----------------------------------------------------------------------
-# Parsing
-# ----------------------------------------------------------------------
 def parse_llm_json(output_str):
-    """Extract the classification fields from Qwen's raw text output."""
+    """Parse the model's JSON reply into classification fields (all None on failure)."""
     try:
         match = re.search(r"\{.*\}", str(output_str), re.DOTALL)
         data = json.loads(match.group()) if match else json.loads(output_str)
@@ -260,14 +222,8 @@ def parse_llm_json(output_str):
         }
 
 
-# ----------------------------------------------------------------------
-# Core classification loop
-# ----------------------------------------------------------------------
 def classify_papers(df: pd.DataFrame, client: OpenAI, model: str = TARGET_MODEL) -> pd.DataFrame:
-    """
-    df must contain: wos_id, title, keywords, abstract.
-    Returns df with raw_output, status, and parsed classification columns.
-    """
+    """Classify each row; df needs wos_id, title, keywords, abstract."""
     results = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc=f"Classifying with {model}"):
         content = (
@@ -290,7 +246,7 @@ def classify_papers(df: pd.DataFrame, client: OpenAI, model: str = TARGET_MODEL)
 
 def retry_failed(df_results: pd.DataFrame, df_source: pd.DataFrame, client: OpenAI,
                   model: str = TARGET_MODEL, max_passes: int = MAX_RETRY_PASSES) -> pd.DataFrame:
-    """Re-run rows that failed the API call, up to max_passes extra passes."""
+    """Re-run rows whose API call failed, for up to max_passes extra passes."""
     for pass_num in range(max_passes):
         failed_ids = df_results.loc[df_results["status"] == "Failed", "wos_id"].tolist()
         if not failed_ids:
@@ -304,14 +260,7 @@ def retry_failed(df_results: pd.DataFrame, df_source: pd.DataFrame, client: Open
 
 
 def split_by_confidence(df_results: pd.DataFrame):
-    """
-    high confidence + successful call + clean parse -> auto-ingest
-    everything else (medium, low, failed call, failed parse) -> needs review
-
-    Both halves get a review_status column so that, downstream, ingestion
-    can write ONE unified batch to the database while still knowing which
-    rows were machine-only vs. human-checked.
-    """
+    """Split into (auto_ingest, needs_review); both get a review_status column."""
     is_high = df_results["confidence"] == "high"
     is_clean = df_results["status"] == "Success"
     auto_ingest = df_results[is_high & is_clean].copy()
@@ -322,16 +271,9 @@ def split_by_confidence(df_results: pd.DataFrame):
     return auto_ingest, needs_review
 
 
-# ----------------------------------------------------------------------
-# Google Sheets — pre-ingestion human review queue
-# ----------------------------------------------------------------------
+# Google Sheets review queue
 def get_sheets_client() -> gspread.Client:
-    """
-    Auth against the review-queue Google Sheet using a service account.
-    Uses the SAME credential pattern as the existing crowd-sourced
-    misclassification sheet in explorer.py, but a separate env var so the
-    two integrations stay independently configurable/rotatable.
-    """
+    """Authorize gspread with the service account file in GOOGLE_SERVICE_ACCOUNT_FILE."""
     creds_path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
     if not creds_path:
         raise EnvironmentError(
@@ -347,13 +289,7 @@ def get_sheets_client() -> gspread.Client:
 
 
 def get_review_sheet_id() -> str:
-    """
-    REVIEW_SHEET_ID env var takes priority; falls back to
-    DEFAULT_REVIEW_SHEET_ID so the script works out of the box for the
-    current review sheet without extra setup, while still staying
-    overridable if the sheet is ever migrated or a different maintainer
-    wants to point at a test sheet.
-    """
+    """Return REVIEW_SHEET_ID if set, else DEFAULT_REVIEW_SHEET_ID."""
     sheet_id = os.environ.get("REVIEW_SHEET_ID")
     if sheet_id:
         return sheet_id
@@ -362,11 +298,7 @@ def get_review_sheet_id() -> str:
 
 
 def push_to_review_sheet(df_needs_review: pd.DataFrame) -> None:
-    """
-    Append rows needing human review to the dedicated review Google Sheet.
-    Adds empty reviewer_decision / reviewer_notes / reviewed_by / reviewed_at
-    columns for the human to fill in directly in the sheet.
-    """
+    """Append rows to the review sheet, with empty reviewer_* columns for the reviewer."""
     if df_needs_review.empty:
         logger.info("No rows need human review — nothing pushed to the sheet.")
         return
@@ -392,13 +324,10 @@ def push_to_review_sheet(df_needs_review: pd.DataFrame) -> None:
 
 def pull_reviewed_rows() -> pd.DataFrame:
     """
-    Read the review sheet and return only rows a human has finished with
-    (reviewer_decision is filled in). Normalizes to the same schema as
-    classify_papers() output so it can be concatenated with auto-ingest rows.
+    Return sheet rows with a non-blank reviewer_decision, tagged "human_reviewed".
 
-    Per-field overrides (reviewer_category / reviewer_service /
-    reviewer_technology), in addition to reviewer_decision, are resolved
-    downstream in ingest_incremental.py's resolve_reviewer_overrides().
+    Per-field reviewer overrides are resolved downstream in ingest_incremental.py
+    (resolve_reviewer_overrides()).
     """
     client = get_sheets_client()
     sheet = client.open_by_key(get_review_sheet_id())
@@ -413,22 +342,12 @@ def pull_reviewed_rows() -> pd.DataFrame:
     df_done = df[df["reviewer_decision"].astype(str).str.strip() != ""].copy()
     logger.info(f"{len(df_done)} of {len(df)} review-sheet row(s) have been completed by a human")
 
-    # reviewer_decision overrides the model's decision/category/service/technology
-    # where the reviewer explicitly entered a correction; blank reviewer fields
-    # mean "confirmed as-is".
     df_done["review_status"] = "human_reviewed"
     return df_done
 
 
-# ----------------------------------------------------------------------
-# I/O
-# ----------------------------------------------------------------------
 def normalize_wos_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Rename raw WoS export columns (e.g. "Article Title") to the internal
-    names this script uses (e.g. "title"), based on WOS_COLUMN_ALIASES.
-    If a column already has the internal name, it's left alone.
-    """
+    """Rename raw WoS columns to internal names per WOS_COLUMN_ALIASES."""
     rename_map = {}
     for internal_name, aliases in WOS_COLUMN_ALIASES.items():
         if internal_name in df.columns:
@@ -468,9 +387,6 @@ def load_new_papers(source_path: str) -> pd.DataFrame:
     return df
 
 
-# ----------------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Incremental Qwen classification for new MEco papers")
     parser.add_argument("--input", help="Raw WoS export (csv/xlsx/parquet) of new papers")
@@ -487,10 +403,9 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- Mode 2: pull back human-reviewed rows, don't classify anything new ---
     if args.pull_reviewed:
         df_done = pull_reviewed_rows()
-        # Same title/title collision as auto_ingest — see the note above.
+        # title dropped for the same reason as in the auto-ingest CSV below.
         df_done_for_csv = df_done.drop(columns=["title"], errors="ignore")
         reviewed_path = output_dir / "classified_human_reviewed.csv"
         df_done_for_csv.to_csv(reviewed_path, index=False)
@@ -518,15 +433,10 @@ def main():
 
     auto_ingest, needs_review = split_by_confidence(df_results)
 
-    # ingest_incremental.py sources title independently from --wos-export and
-    # merges on wos_id — carrying our own title column into this CSV collides
-    # with that merge (pandas renames both to title_x/title_y instead of a
-    # bare "title" column). Only the review-sheet copy needs title, for a
-    # human reviewer to see.
+    # ingest_incremental.py takes title from --wos-export and merges on wos_id; a title
+    # column here would be suffixed to title_x/title_y by the pandas merge.
     auto_ingest_for_csv = auto_ingest.drop(columns=["title"], errors="ignore")
 
-    # Local CSVs are always written as a redundant audit trail, even for the
-    # rows that also get pushed to the review sheet.
     auto_path = output_dir / "classified_auto_ingest.csv"
     review_backup_path = output_dir / "classified_needs_review.csv"
     auto_ingest_for_csv.to_csv(auto_path, index=False)
