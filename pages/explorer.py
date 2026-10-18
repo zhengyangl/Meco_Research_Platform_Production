@@ -1,5 +1,10 @@
 """
-Data Explorer
+Data Explorer page: filter, chart, browse and export the classified papers.
+
+Reads current papers from PostgreSQL (DATABASE_URL), falling back to local parquet
+files under dashboard_data/. Misclassification reports are appended to a Google
+Sheet (st.secrets: gcp_service_account, feedback_sheet.spreadsheet_id) for manual
+review; this page never writes to the database.
 """
 import json
 from datetime import datetime, timezone
@@ -16,9 +21,6 @@ import urllib.parse
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ════════════════════════════════════════════════════════════════
-# PAGE CONFIG 
-# ════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Data Explorer · MEco",
     page_icon="🔍",
@@ -26,9 +28,7 @@ st.set_page_config(
     initial_sidebar_state="expanded", 
 )
 
-# ════════════════════════════════════════════════════════════════
-# GLOBAL CSS
-# ════════════════════════════════════════════════════════════════
+# Global CSS
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -135,31 +135,17 @@ div[data-testid="stRadio"] label {
 </style>
 """, unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════════
-# DATA LOADING & PRE-CACHING
-# ════════════════════════════════════════════════════════════════
-# Confirmed design (Aug 2026): Explorer reads DIRECTLY from PostgreSQL —
-# unlike the narrative page (app.py), which only ever reads pre-computed
-# static files under dashboard_data/. Explorer must show ALL current data
-# (legacy + everything ingest_incremental.py has added since), so its query
-# is intentionally NOT filtered by dataset_id — see aggregate.py's
-# LEGACY_DATASET_IDS design note for the narrative-side half of this split.
-#
-# Filtering logic itself (cascading multiselects, search, AgGrid, URL sync)
-# is UNCHANGED — it still all runs in-memory over a single DataFrame. At the
-# corpus's current scale (~30k rows, growing in small increments) querying
-# the whole table once per cache period is simpler and safer than rewriting
-# every filter as dynamic SQL.
+# Data loading
+# The query is intentionally not filtered by dataset_id, so the Explorer shows all
+# current data. Filtering then runs in memory over a single DataFrame.
 import os
 import psycopg2
 
 _DATA_DIR = Path(__file__).parent.parent / "dashboard_data"
-_CACHE_TTL_SECONDS = 900  # 15 minutes — new incremental data appears without an app restart
+_CACHE_TTL_SECONDS = 900  # 15 minutes
 
-# The 22-service whitelist. Defined once here (not derived from the data)
-# because two services — Spiritual and Cultural Identity — currently have
-# zero papers and would silently disappear from any df.unique()-based list.
-# Also used to filter the DB query below, same whitelist aggregate.py uses.
+# Service whitelist, fixed rather than derived from the data so that services with
+# no papers still appear in lists built from it. Also used to filter the DB query.
 _ALL_SERVICES = [
     "Biochemicals", "Fibre/Hide/Wood", "Fuel", "Potable Water",
     "Food", "Biodiversity", "Disease Regulation", "Waste Treatment",
@@ -215,20 +201,7 @@ def _get_db_uri():
 
 
 def _query_papers_and_live_meta_from_db():
-    """
-    Single connection, two queries:
-      1. The papers query (unchanged) — feeds df_all.
-      2. A live meta-stats query, unfiltered by dataset_id — total_papers /
-         non_review / reviews across ALL current data. decision_y is just
-         len(df) since the papers query already applies exactly that filter
-         (is_review=FALSE, decision='Y', whitelist), so no extra query needed.
-
-    This intentionally does NOT touch corpus_meta.json's generation logic in
-    aggregate.py — that file stays legacy-locked (LEGACY_DATASET_IDS) for the
-    narrative page. Explorer needs different numbers (live, not locked), so
-    it computes its own here rather than overloading one file for two
-    incompatible purposes.
-    """
+    """Return (papers df, live corpus counts); decision_y is len(df)."""
     uri = _get_db_uri()
     if not uri:
         raise EnvironmentError("DATABASE_URL is not set")
@@ -254,6 +227,7 @@ def _query_papers_and_live_meta_from_db():
 
 
 def _query_abstracts_from_db() -> dict:
+    """Return {wos_id: abstract} for papers that have an abstract."""
     uri = _get_db_uri()
     if not uri:
         raise EnvironmentError("DATABASE_URL is not set")
@@ -269,11 +243,8 @@ def _query_abstracts_from_db() -> dict:
 
 @st.cache_data(ttl=_CACHE_TTL_SECONDS)
 def load_data() -> tuple:
-    # 1. Load DataFrame (+ live meta counts) — DB first, local parquet as
-    # fallback if the DB is unreachable (network hiccup, credentials not yet
-    # configured, etc). On fallback, live_meta is unavailable — the static
-    # (legacy) meta numbers are used instead, which is fine since the
-    # fallback banner already tells the user data may be stale.
+    """Return (papers df, filter options, corpus meta, citation tier thresholds)."""
+    # DB first, local parquet on any DB failure; live_meta is then None.
     data_source = "db"
     live_meta = None
     try:
@@ -306,12 +277,11 @@ def load_data() -> tuple:
         "Other Journals"
     )
     
-    # 2. Pre-compute dropdown options to save CPU cycles on reruns
-	# Pre-compute top 100 institutions by paper count
+    # Top 100 institutions by paper count
     _inst_counts = df["institution_top"].value_counts()
     _top_institutions = _inst_counts.head(100).index.tolist()
 
-    # Explode pipe-separated funding_agencies into individual agency names
+    # funding_agencies is pipe-separated
     _funding_flat = (
         df["funding_agencies"].dropna()
         .str.split(r" \| ", regex=True).explode().str.strip()
@@ -330,11 +300,7 @@ def load_data() -> tuple:
         "top_institutions": _top_institutions,
         "funding_list": _funding_list,
     }
-    # 3. Load Meta — starts from the static (legacy-locked) file for
-    # provenance fields like dataset_version, then LIVE counts overwrite
-    # total_papers/non_review/reviews/decision_y when the DB is reachable,
-    # so the methodology panel reflects the current Explorer contents rather
-    # than staying frozen at the original published numbers.
+    # Static corpus_meta.json first; live DB counts override its count fields.
     try:
         with open(_DATA_DIR / "corpus_meta.json", encoding="utf-8") as f:
             meta = json.load(f)
@@ -345,23 +311,15 @@ def load_data() -> tuple:
     meta["_data_source"] = data_source
     meta["_loaded_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     
-    # 4. Pre-compute Impact Tier thresholds — relative to the FULL corpus.
-    # These never change as the user filters, so "Top 1%" always means
-    # "Top 1% of all 31,559 papers", which is an absolute impact signal.
-    # The user can then see how many high-impact papers fall within their
-    # current filter slice.
+    # Citation thresholds over the full loaded corpus, independent of user filters.
     _cits = df["times_cited"].values
     tiers = {
         "top_1_threshold":   int(pd.Series(_cits).quantile(0.99)),
         "top_10_threshold":  int(pd.Series(_cits).quantile(0.90)),
         "median_threshold":  int(pd.Series(_cits).quantile(0.50)),
-        # Anything strictly below the median (i.e. bottom half) we treat as "tail".
-        # The exact 0.50 quantile becomes the boundary between Median and Tail.
     }
 
-    # service_category isn't returned by the DB query (it's derived, not
-    # stored) — compute it the same way aggregate.py does, from the same
-    # whitelist mapping, so filtering behaves identically either data source.
+    # service_category is not returned by the DB query; derive it from the service.
     if "service_category" not in df.columns:
         _SERVICE_TO_FAMILY = {
             "Biochemicals": "Provisioning", "Fibre/Hide/Wood": "Provisioning",
@@ -384,7 +342,6 @@ def load_data() -> tuple:
 
 df_all, OPTIONS, META, TIERS = load_data()
 
-# Compute the OA percentage once — used in the header health bar.
 _OA_PCT = round((df_all["open_access"] != "Closed").mean() * 100)
 _MEDIAN_CITED = int(df_all["times_cited"].median())
 
@@ -401,14 +358,10 @@ def load_abstracts():
 
 ABSTRACTS = load_abstracts()
 
-# ── Google Sheets connection for crowd-sourced feedback ─────────
-# Kept as a resource cache (not data cache) since gspread client objects
-# aren't picklable in the way st.cache_data expects. This connects once
-# per session, not once per submission.
+# Feedback sheet (cache_resource: gspread clients are not picklable for cache_data)
 @st.cache_resource
 def _get_feedback_sheet():
-    """Returns the worksheet object, or None if secrets aren't configured
-    (e.g. running locally without secrets.toml set up yet)."""
+    """Return the feedback worksheet, or None if it cannot be opened (e.g. no secrets)."""
     try:
         _scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
@@ -426,12 +379,12 @@ def _get_feedback_sheet():
 
 def _submit_feedback(wos_id, doi, title, current_category, current_service,
                      suggested_category, suggested_service, reason, reporter_email):
-    """Appends one row to the feedback sheet. Returns True on success."""
+    """Append one row to the feedback sheet; return True on success."""
     _ws = _get_feedback_sheet()
     if _ws is None:
         return False
     try:
-        # US Eastern time, with automatic EST/EDT handling via zoneinfo 
+        # Timestamp in US Eastern time
         _ts = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M:%S %Z")
         _ws.append_row([
             _ts,
@@ -445,12 +398,7 @@ def _submit_feedback(wos_id, doi, title, current_category, current_service,
         return False
 
 
-# (── _ALL_SERVICES moved up to before load_data(), see DATA LOADING section ──)
-
-# ════════════════════════════════════════════════════════════════
-# URL STATE SYNC 
-# ════════════════════════════════════════════════════════════════
-# Lets a researcher share a precise view by URL. 
+# URL state: filter defaults are read from query params so a view can be shared
 _qp = st.query_params
 def _read_qp_list(key, valid_set):
     """Read a comma-separated multiselect default from URL, keeping only
@@ -460,18 +408,8 @@ def _read_qp_list(key, valid_set):
         return []
     return [v for v in raw.split(",") if v in valid_set]
 
-# Defaults driven by URL (fall back to empty / full range when absent).
-#
-# Confirmed bug (Aug 2026): a single umbrella "state_initialized" flag meant
-# that if Streamlit ever failed to re-render one of the filter widgets on a
-# given rerun (observed specifically after clicking the manual refresh
-# button, which triggers two reruns in quick succession — see
-# handover.md), that widget's session_state key could be dropped, and
-# because the umbrella flag was already True, it would never be restored —
-# causing a hard AttributeError on the next read. Each key below is now
-# checked and restored individually, every run. This costs nothing
-# (a handful of dict lookups) and makes a dropped key self-heal on the very
-# next rerun instead of crashing.
+# Each session_state key is initialised independently on every run (no single init
+# flag), so a key dropped by Streamlit is restored instead of raising AttributeError.
 if "f_category" not in st.session_state:
     st.session_state.f_category = _read_qp_list("paradigm", set(OPTIONS["categories"]))
 if "f_family" not in st.session_state:
@@ -505,9 +443,7 @@ if "f_min_cit" not in st.session_state:
     except (TypeError, ValueError):
         st.session_state.f_min_cit = 0
 
-# ════════════════════════════════
-# SIDEBAR: CASCADING FILTERS
-# ════════════════════════════════
+# Sidebar filters
 with st.sidebar:
     _eb, _refresh, _reset = st.columns([2, 1, 1])
     with _eb:
@@ -532,7 +468,7 @@ with st.sidebar:
                                    "spelling. For country, institution, or journal, use the "
                                    "filters below instead.")
 
-    # Show the match breakdown immediately under the search box
+    # Per-field match counts for the search phrase
     if f_search:
         _q_preview = f_search.lower()
         _preview_fields = {"title": "Title", "authors": "Authors",
@@ -607,9 +543,7 @@ with st.sidebar:
         				"Papers with no funding info or niche local grants are not included.")
 
 
-# ══════════════════════════
-# APPLY FILTERS
-# ══════════════════════════
+# Apply filters
 df = df_all
 df = df[(df["pub_year"] >= st.session_state.f_year[0]) & (df["pub_year"] <= st.session_state.f_year[1])]
 if st.session_state.f_category: df = df[df["category"].isin(st.session_state.f_category)]
@@ -627,7 +561,6 @@ if f_search:
         mask |= df[field].fillna("").str.lower().str.contains(q, na=False, regex=False)
     df = df[mask]
 
-# New NLP-derived filters
 if st.session_state.f_country:
     df = df[df["country_first"].isin(st.session_state.f_country)]
 
@@ -638,8 +571,7 @@ if st.session_state.f_tech_cluster:
     df = df[df["technology_cluster"].isin(st.session_state.f_tech_cluster)]
 
 if st.session_state.f_funding:
-    # funding_agencies is pipe-separated (e.g. "NSF | NIH").
-    # Check if any selected agency appears as an exact element in the list.
+    # Exact match against any element of the pipe-separated funding_agencies.
     _selected = set(st.session_state.f_funding)
     _funding_mask = df["funding_agencies"].fillna("").apply(
         lambda x: bool(_selected.intersection(
@@ -648,9 +580,7 @@ if st.session_state.f_funding:
     )
     df = df[_funding_mask]
 
-# ═══════════════════════════════════════
-# MAIN AREA: HEADER + HEALTH BAR
-# ═══════════════════════════════════════
+# Header and corpus health bar
 st.markdown("""
 <div class="hero-nav">
   <a class="hn-secondary" href="/">← Back to the story</a>
@@ -660,7 +590,6 @@ st.markdown("""
 st.markdown(f'<h1 class="exp-title">{len(df_all):,} Bio-inspired Papers.</h1>',
             unsafe_allow_html=True)
 
-# One-line corpus summary — dynamic, based on actual data
 _n_countries_all = df_all["country_first"].dropna().nunique()
 st.markdown(
     f'<p style="font:400 1.0rem/1.5 \'Inter\',sans-serif; color:#475569; '
@@ -674,8 +603,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Fallback banner — only shows when the DB was unreachable and we're
-# serving the last local parquet snapshot instead.
+# Shown only when serving the parquet fallback.
 if META.get("_data_source") == "fallback_parquet":
     st.warning(
         "⚠ Could not reach the database — showing a locally cached snapshot "
@@ -685,7 +613,6 @@ if META.get("_data_source") == "fallback_parquet":
         icon="⚠️",
     )
 
-# Health bar
 _source_label = "database (live)" if META.get("_data_source") == "db" else "local snapshot (fallback)"
 st.markdown(
     f"""<div style="
@@ -702,7 +629,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Current-filter summary pill (kept from prior version but trimmed).
 if len(df) > 0:
     st.markdown(
         f'<div class="match-count"><b>{len(df):,}</b> of {len(df_all):,} matched · '
@@ -717,17 +643,12 @@ else:
         unsafe_allow_html=True
     )
 
-# ════════════════════════════════════════════════════════════════
-# IMPACT TIERS 
-# ════════════════════════════════════════════════════════════════
-# Thresholds are computed once against the FULL corpus, so "Top 1%" always
-# means "Top 1% of all 31,559 papers" regardless of how the user filters.
-# What changes under filtering is HOW MANY of the user's current selection
-# fall into each tier — an absolute impact signal, not a relative one.
+# Impact tiers: thresholds come from the full corpus (TIERS); counts reflect the current filter.
 st.markdown('<div style="margin-top:1.0rem;"></div>', unsafe_allow_html=True)
 
 _t1, _t2, _t3, _t4 = st.columns(4)
 def _tier_card(col, label, count, description, threshold_text, accent):
+    """Render one impact-tier card in the given column."""
     col.markdown(f"""
     <div style="
         background:#FFFFFF;
@@ -827,12 +748,10 @@ _tier_card(
     "#94A3B8",
 )
 
-# ════════════════════════════════════════════════════════════════
-# VISUALIZATIONS 
-# ════════════════════════════════════════════════════════════════
+# Visualizations
 st.markdown('<div style="margin-top:1.2rem;"></div>', unsafe_allow_html=True)
 
-# Custom CSS for tabs and cards
+# CSS for tabs and chart cards
 st.markdown("""
 <style>
 
@@ -950,7 +869,7 @@ if len(df) > 0:
             "Tech Ecosystem"
         ])
 
-        # ── Choropleth ────────────────────────────────────────
+        # Choropleth
         with tab_map:
             st.markdown("""
             <div class="chart-card" style="margin-bottom: 0.5rem; padding-bottom: 0.8rem;">
@@ -1066,7 +985,7 @@ if len(df) > 0:
             else:
                 st.info("No geographic data available for the selected filters.")
 
-        # ── Ecosystem Service Gap Analysis ────────────────────
+        # Service gap analysis
         with tab_trend:
             st.markdown("""
             <div class="chart-card">
@@ -1079,21 +998,19 @@ if len(df) > 0:
                 </div>
             """, unsafe_allow_html=True)
             
-            # Count papers per ecosystem service in the filtered data.
             _svc_counts = df["ecosystem_service"].value_counts()
             _gap_df = pd.DataFrame({
                 "service": _ALL_SERVICES,
                 "n": [int(_svc_counts.get(s, 0)) for s in _ALL_SERVICES],
             }).sort_values("n", ascending=True)
             
-            # Color: green if >= 500, muted amber if < 500 (research gap)
+            # Bars below 500 papers are marked as gaps
             _gap_df["color"] = _gap_df["n"].apply(
                 lambda x: "#4F7942" if x >= 500 else "#B7791F"
             )
             
             fig_gap = go.Figure()
             
-            # Bars
             fig_gap.add_trace(go.Bar(
                 y = _gap_df["service"],
                 x = _gap_df["n"],
@@ -1102,7 +1019,6 @@ if len(df) > 0:
                 hovertemplate= "<b>%{y}</b><br>%{x:,} papers<extra></extra>",
             ))
             
-            # Threshold line at 500
             fig_gap.add_vline(
                 x=500, line_dash="dot", line_color="#2563EB", line_width=2,
             )
@@ -1145,7 +1061,6 @@ if len(df) > 0:
             )
             st.plotly_chart(fig_gap, use_container_width=True, config={"displayModeBar": False})
             
-            # Quick stats
             _n_above = (_gap_df["n"] >= 500).sum()
             _n_zero = (_gap_df["n"] == 0).sum()
             _lowest = _gap_df.iloc[0]
@@ -1173,7 +1088,7 @@ if len(df) > 0:
                 )
             st.markdown('</div>', unsafe_allow_html=True)
 
-        # ── Technology Treemap ────────────────────────────────
+        # Technology treemap
         with tab_tech:
             st.markdown("""
             <div class="chart-card">
@@ -1290,16 +1205,12 @@ else:
     st.info("No data matches the selected filters.")
 
 
-# ══════════════════════
-# MAIN TABLE 
-# ══════════════════════
+# Records table
 st.markdown('<div style="margin-top:1.4rem;"></div>', unsafe_allow_html=True)
 st.markdown('<div class="chart-label">Detailed Records</div>', unsafe_allow_html=True)
 
-# AgGrid Community edition has no built-in column-visibility panel (that's
-# an Enterprise feature in recent ag-Grid versions), so we expose it here
-# in Streamlit instead and pass the resulting hide/show state into
-# configure_column() below.
+# AgGrid Community has no column-visibility panel; hidden columns are chosen here
+# and passed to configure_column() via hide=.
 _HIDEABLE_COLS = {
     "keywords":              "Keywords",
     "open_access":           "Access",
@@ -1355,13 +1266,11 @@ _grid_cols = [
     "title", "authors", "pub_year", "source_title", "times_cited",
     "open_access", "ecosystem_service", "service_category", "category",
     "technology", "keywords", "doi",
-    # NLP-derived columns
     "country_first", "institution_top", "technology_cluster",
-    # available via "Show additional columns" below.
     "affiliations", "wos_categories_parsed", "addresses",
     "funding_orgs", "countries_all", "institutions_all", "funding_agencies", 
     "model_version",
-    # always visible, pinned last
+    # last column; not in _HIDEABLE_COLS
     "wos_id",
 ]
 
@@ -1460,14 +1369,8 @@ AgGrid(
     custom_css=_custom_css,
 )
      
-# ════════════════════════════════════════════════════════════════
-# REPORT A MISCLASSIFICATION
-# ════════════════════════════════════════════════════════════════
-# The user pastes a WoS ID
-# or DOI, we look it up with a fast dict/index lookup, and the report
-# form only appears once a match is confirmed. Submissions go to a
-# Google Sheet for manual review — nothing here writes to the production
-# database directly.
+# Misclassification report: look up a paper by WoS ID or DOI, then submit the form.
+# Reports go to the feedback Google Sheet only.
 st.markdown('<div style="margin-top:1.4rem;"></div>', unsafe_allow_html=True)
 with st.expander("🚩 Report a Misclassification"):
     st.caption(
@@ -1542,9 +1445,7 @@ with st.expander("🚩 Report a Misclassification"):
                             "Please try again later, or contact the research team directly."
                         )
                                     
-# ════════════════════════════════════════════════════════════════
-# METHODOLOGY PANEL 
-# ════════════════════════════════════════════════════════════════
+# Methodology panel
 st.markdown('<div style="margin-top:1.4rem;"></div>', unsafe_allow_html=True)
 with st.expander("📊 How were these papers classified? (Methodology & data lineage)"):
 	st.markdown(f"""
@@ -1591,9 +1492,7 @@ reads `is_current = TRUE` rows. Raw LLM JSON responses are kept in the
 for the codebase and `docs/handover.md` for how the pipeline is operated
 day to day.
     """)
-# ════════════════════════════════════════════════════════════════
-# EXPORT
-# ════════════════════════════════════════════════════════════════
+# Export
 st.markdown('<div style="margin-top:1.0rem;"></div>', unsafe_allow_html=True)
 st.markdown(
     '<div style="font: 600 .65rem/1.2 Inter, sans-serif; '
@@ -1641,8 +1540,7 @@ _selected_cols = st.multiselect(
 if not _selected_cols:
     _selected_cols = _DEFAULT_EXPORT.copy()
 
-# "abstract" is intentionally NOT a column on `df` — it lives in the
-# separate ABSTRACTS dict and is joined in only at export time below.
+# "abstract" is not a column of df; it is joined from ABSTRACTS at export time.
 _valid_cols = [c for c in _selected_cols if c in df.columns or c == "abstract"]
 
 if _valid_cols:
@@ -1654,7 +1552,7 @@ if _valid_cols:
     _export_df = df[[c for c in _valid_cols if c != "abstract"]].copy()
     if "abstract" in _valid_cols:
         _export_df["abstract"] = df["wos_id"].map(ABSTRACTS)
-        _export_df = _export_df[_valid_cols]  # restore user's column order
+        _export_df = _export_df[_valid_cols]  # keep the selected column order
 
     _csv = _export_df.to_csv(index=False).encode("utf-8")
     st.download_button(
