@@ -1,29 +1,15 @@
 #!/usr/bin/env python
 """
-ingest_incremental.py — Write NEW papers + their classifications into PostgreSQL.
+ingest_incremental.py - Ingest newly classified papers into PostgreSQL.
 
-Pipeline position: runs AFTER classify.py has produced
-  - classify_output/classified_auto_ingest.csv          (from a normal run)
-  - classify_output/classified_human_reviewed.csv        (from --pull-reviewed,
-                                                            once a human has
-                                                            finished the sheet)
+Joins classify.py output CSVs (classified_auto_ingest.csv and/or
+classified_human_reviewed.csv) to the raw WoS export on wos_id, then writes
+datasets, papers, classifications, classification_audit and pipeline_runs in a
+single transaction. Intended for small incremental batches.
 
-This differs from the original one-time ingest_initial.py in two ways:
-  1. The join key is wos_id directly. classify.py already carries a clean
-     wos_id per row (normalized from the raw WoS export), so there's no more
-     need for the title-cleaning fuzzy join that the historical load used to
-     reconcile two separately-exported files.
-  2. It's meant to run repeatedly on small incremental batches (tens to a
-     few hundred rows), not once on ~69k rows — so re-running it on a batch
-     that's already partly ingested should be safe (idempotent), not
-     duplicate data or crash.
-
-It writes to: datasets, papers, classifications, classification_audit,
-pipeline_runs — matching the confirmed DDL (Aug 2026). Note that
-classification_audit only stores LLM call metadata (raw_output JSONB,
-confidence FLOAT, model/prompt version) — it has no columns for who reviewed
-a row or when. That information lives in the Google review sheet itself,
-which remains the permanent record of human review activity.
+Existing papers are skipped (ON CONFLICT DO NOTHING) and prior is_current
+classifications for the same wos_ids are retired before new ones are inserted.
+classification_audit stores LLM call metadata only, not reviewer identity.
 
 Usage:
     export DATABASE_URL="postgresql://pipeline_user:***@127.0.0.1:5432/me_dashboard"
@@ -33,7 +19,7 @@ Usage:
         --classified classify_output/classified_auto_ingest.csv classify_output/classified_human_reviewed.csv \\
         --dataset-version 2026-08
 
-    # Dry run: load, merge, and report what WOULD be written — no DB connection
+    # Dry run: load, merge and report only; no DB connection
     python ingest_incremental.py \\
         --wos-export new_batch_raw_wos.xlsx \\
         --classified classify_output/classified_auto_ingest.csv \\
@@ -60,14 +46,11 @@ DATASET_SOURCE = "WoS"
 MODEL_NAME = "qwen/qwen-2.5-72b-instruct"       # classification_audit.model_name
 MODEL_VERSION = "Qwen-2.5-72B-instruct"          # classifications.model_version
 
-# classification_audit.confidence is FLOAT, but Qwen reports a "high" /
-# "medium" / "low" label, not a number. This mapping is a Julian-confirm-me
-# placeholder — adjust if a different numeric scale is preferred.
+# classification_audit.confidence is FLOAT but the model reports a high/medium/low
+# label; these numeric values are an assigned mapping, not model output.
 CONFIDENCE_TO_FLOAT = {"high": 1.0, "medium": 0.6, "low": 0.3}
 
-# Raw WoS export column -> internal metadata field. Same spirit as
-# classify.py's WOS_COLUMN_ALIASES, but covers every column the `papers`
-# table needs (classify.py only needed title/keywords/abstract/wos_id).
+# Raw WoS export column names accepted for each internal metadata field.
 WOS_METADATA_ALIASES = {
     "wos_id": ["UT (Unique WOS ID)", "UT", "Unique WOS ID"],
     "doi": ["DOI"],
@@ -88,9 +71,6 @@ WOS_METADATA_ALIASES = {
 REQUIRED_METADATA_COLUMNS = {"wos_id", "title"}
 
 
-# ----------------------------------------------------------------------
-# Loading + normalizing the raw WoS export
-# ----------------------------------------------------------------------
 def normalize_metadata_columns(df: pd.DataFrame) -> pd.DataFrame:
     rename_map = {}
     for internal_name, aliases in WOS_METADATA_ALIASES.items():
@@ -132,15 +112,8 @@ def load_wos_export(path: str) -> pd.DataFrame:
     return df
 
 
-# ----------------------------------------------------------------------
-# Loading classify.py's output batches
-# ----------------------------------------------------------------------
 def load_classified_batches(paths) -> pd.DataFrame:
-    """
-    Concatenate classified_auto_ingest.csv and/or classified_human_reviewed.csv.
-    Both files share the same schema (see classify.py), distinguished by
-    review_status ("auto_high_confidence" vs "human_reviewed").
-    """
+    """Concatenate classified CSVs, keep last row per wos_id, apply reviewer overrides."""
     frames = []
     for p in paths:
         df = pd.read_csv(p)
@@ -162,13 +135,7 @@ def load_classified_batches(paths) -> pd.DataFrame:
 
 
 def resolve_reviewer_overrides(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Where a human reviewer filled in reviewer_decision / reviewer_category /
-    reviewer_service / reviewer_technology, those become the final values —
-    each field overrides independently, so a reviewer can correct just the
-    category without having to re-type everything else. Blank reviewer
-    fields mean "confirmed as-is" for that field.
-    """
+    """Override decision/category/service/technology with non-blank reviewer_* values."""
     field_map = {
         "reviewer_decision": "decision",
         "reviewer_category": "category",
@@ -185,9 +152,6 @@ def resolve_reviewer_overrides(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ----------------------------------------------------------------------
-# Merge + row preparation
-# ----------------------------------------------------------------------
 def merge_metadata_and_classifications(df_meta: pd.DataFrame, df_class: pd.DataFrame) -> pd.DataFrame:
     merged = pd.merge(df_class, df_meta, on="wos_id", how="left", validate="one_to_one")
 
@@ -258,11 +222,7 @@ def build_classification_rows(merged: pd.DataFrame, run_id: uuid.UUID):
 
 
 def safe_json_for_audit(raw_output) -> Json:
-    """
-    classification_audit.raw_output is JSONB. Qwen's raw_output is usually a
-    clean JSON string, but on failed calls it can be an error message or
-    stray text — never let a malformed value break the insert.
-    """
+    """Wrap raw_output for JSONB: parsed JSON, embedded {...}, else {"raw_text": ...}."""
     if pd.isna(raw_output):
         return Json(None)
     try:
@@ -278,17 +238,11 @@ def safe_json_for_audit(raw_output) -> Json:
 
 
 def build_audit_rows(merged: pd.DataFrame, run_id: uuid.UUID):
-    """
-    Matches the confirmed classification_audit DDL:
-        (wos_id, model_name, model_version, prompt_version,
-         raw_output JSONB, confidence FLOAT, run_id, created_at DEFAULT NOW())
-    One row per LLM call — this logs what the model said, not who reviewed
-    it. Reviewer identity/notes/timestamp stay in the Google Sheet.
-    """
+    """Build classification_audit rows, mapping the confidence label to a float."""
     rows = []
     for _, r in merged.iterrows():
         conf_label = str(r.get("confidence", "")).strip().lower()
-        conf_float = CONFIDENCE_TO_FLOAT.get(conf_label)  # None if missing/unrecognized
+        conf_float = CONFIDENCE_TO_FLOAT.get(conf_label)  # None if unrecognized
         prompt_version = r.get("prompt_version") if pd.notna(r.get("prompt_version")) else None
         rows.append((
             r["wos_id"],
@@ -302,11 +256,8 @@ def build_audit_rows(merged: pd.DataFrame, run_id: uuid.UUID):
     return rows
 
 
-# ----------------------------------------------------------------------
-# Database writes
-# ----------------------------------------------------------------------
 def get_git_commit_hash():
-    """Best-effort git commit hash for pipeline_runs traceability; None if unavailable."""
+    """Return HEAD commit hash of this script's repo, or None if unavailable."""
     try:
         import subprocess
         result = subprocess.run(
@@ -336,7 +287,6 @@ def write_to_database(merged: pd.DataFrame, dataset_version: str, run_id: uuid.U
     try:
         start_time = datetime.now(timezone.utc)
 
-        # datasets
         cur.execute(
             """INSERT INTO datasets (source, version, record_count)
                VALUES (%s, %s, %s) RETURNING dataset_id""",
@@ -345,7 +295,7 @@ def write_to_database(merged: pd.DataFrame, dataset_version: str, run_id: uuid.U
         dataset_id = cur.fetchone()[0]
         logger.info(f"dataset_id = {dataset_id}")
 
-        # papers — new papers only; existing wos_ids are left untouched here
+        # Existing wos_ids are left untouched.
         papers_rows = build_papers_rows(merged, dataset_id)
         execute_values(
             cur,
@@ -360,10 +310,7 @@ def write_to_database(merged: pd.DataFrame, dataset_version: str, run_id: uuid.U
         )
         logger.info(f"papers: {len(papers_rows)} row(s) submitted (ON CONFLICT DO NOTHING)")
 
-        # classifications — retire any prior is_current row for these wos_ids
-        # first (no-op if the wos_id is genuinely new), then insert the new
-        # current classification. Makes this script safe to re-run on a
-        # batch that was already partially ingested.
+        # Retire prior is_current rows before inserting the new current ones.
         wos_ids = [r["wos_id"] for _, r in merged.iterrows()]
         cur.execute(
             "UPDATE classifications SET is_current = FALSE WHERE wos_id = ANY(%s) AND is_current = TRUE",
@@ -383,9 +330,6 @@ def write_to_database(merged: pd.DataFrame, dataset_version: str, run_id: uuid.U
         )
         logger.info(f"classifications: inserted {len(class_rows)} row(s)")
 
-        # classification_audit — one row per LLM call (raw_output JSONB,
-        # confidence FLOAT). Reviewer identity/notes are NOT stored here —
-        # see module docstring.
         audit_rows = build_audit_rows(merged, run_id)
         execute_values(
             cur,
@@ -398,7 +342,6 @@ def write_to_database(merged: pd.DataFrame, dataset_version: str, run_id: uuid.U
         )
         logger.info(f"classification_audit: inserted {len(audit_rows)} row(s)")
 
-        # pipeline_runs
         end_time = datetime.now(timezone.utc)
         cur.execute(
             """INSERT INTO pipeline_runs
@@ -424,9 +367,6 @@ def write_to_database(merged: pd.DataFrame, dataset_version: str, run_id: uuid.U
         conn.close()
 
 
-# ----------------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Incremental ingestion of newly classified papers")
     parser.add_argument("--wos-export", required=True, help="Raw WoS export (xlsx/csv) for this batch")
