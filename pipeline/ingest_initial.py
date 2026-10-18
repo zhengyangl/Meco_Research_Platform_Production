@@ -295,7 +295,7 @@ for label, sql in checks:
 #   Total papers:            68,917
 #   Non-review papers:       59,599
 #   Decision = Y (All):      35,433
-print("\nExpected: 68,917 papers | 59,599 non-review | 35,433 Decision=Y (All)| 31,593 Target Corpus")
+print("\nExpected: 68,917 papers | 59,599 non-review | 35,433 Decision=Y (All)| 31,559 Target Corpus")
 
 cur.close()
 conn.close()
