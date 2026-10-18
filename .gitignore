@@ -1,0 +1,33 @@
+# Credentials
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*service-account*.json
+*service_account*.json
+*-key.json
+google_api_key/
+credentials/
+secrets/
+*.pem
+*.ppk
+
+# Pipeline working data
+run_pipeline_work/
+pipeline/data/wos_archive/
+classify_output/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+venv/
+.venv/
+env/
+*.egg-info/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
