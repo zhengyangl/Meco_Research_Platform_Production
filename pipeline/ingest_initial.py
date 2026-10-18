@@ -1,9 +1,19 @@
 """
-Initial Data Ingestion
+ingest_initial.py - One-time historical load of the MEco corpus into PostgreSQL.
+
+Reads the WoS export (WOS_FILE) and the GPT classification file (GPT_FILE) from the
+working directory, joins them on a cleaned article title, and writes datasets,
+papers, classifications and pipeline_runs in a single transaction. Then prints
+verification counts against the expected totals.
+
+Requires DATABASE_URL and an empty database created from schema.sql: the narrative
+page assumes this load receives dataset_id 1 (LEGACY_DATASET_IDS in aggregate.py).
+Disaster-recovery use only; ongoing loads use ingest_incremental.py.
+
+Usage:
+    export DATABASE_URL="postgresql://user:password@host:5432/dbname"
+    python ingest_initial.py
 """
-
-
-# In[1]:
 
 
 import uuid
@@ -16,12 +26,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 
 
-# In[2]:
-
-
-# ════════════════════════════════════════════════════════════════
-# CONFIG — change these paths to match your local setup
-# ════════════════════════════════════════════════════════════════
+# Config: input file paths are relative to the working directory
 WOS_FILE = "1_WoS og data.xlsx"
 GPT_FILE = "ManuEco_full data.xlsx"
  
@@ -41,12 +46,7 @@ MODEL_VERSION   = "GPT-4.1"
 PROMPT_VERSION  = "v1.0-jacobs2025"
 
 
-# In[3]:
-
-
-# ════════════════════════════════════════════════════════════════
-# STEP 0 · Read source files
-# ════════════════════════════════════════════════════════════════
+# Step 0: read source files
 print("Reading Excel files...")
 t0 = time.time()
 df1 = pd.read_excel(WOS_FILE)
@@ -56,17 +56,10 @@ print(f"  df2 (GPT):  {len(df2):,} rows, {df2.shape[1]} columns")
 print(f"  Read time:  {time.time()-t0:.1f}s")
 
 
-# In[7]:
-
-
-# ════════════════════════════════════════════════════════════════
-# STEP 1 · Clean and deduplicate
-# ════════════════════════════════════════════════════════════════
+# Step 1: clean and deduplicate
 print("\nCleaning and deduplicating...")
  
-# Build a cleaned join key on both sides.
-# Even though raw titles matched 100% in our earlier test, this protects
-# against edge cases in future data batches.
+# Join key: lower-cased title with collapsed whitespace and no trailing dots.
 def clean_title(s):
     """Lowercase, collapse whitespace, strip trailing punctuation."""
     if pd.isna(s):
@@ -79,28 +72,21 @@ def clean_title(s):
 df1["_join_key"] = df1["Article Title"].apply(clean_title)
 df2["_join_key"] = df2["Article Title"].apply(clean_title)
  
-# df1 has 91 duplicate titles (69,063 → 68,972 unique).
-# Drop duplicates BEFORE merge to prevent row inflation.
+# Drop duplicate titles before the merge so it cannot inflate rows.
 dup_count = df1.duplicated(subset="_join_key", keep="first").sum()
 print(f"  df1 duplicates found: {dup_count}")
 df1 = df1.drop_duplicates(subset="_join_key", keep="first").reset_index(drop=True)
 print(f"  df1 after dedup: {len(df1):,} rows")
 
-# df2 also has duplicates — same paper, different capitalisation in the WoS
-# export (e.g. ALL CAPS vs title case). After cleaning they share the same
-# join key. 109 rows / 68,972 = 0.16%; safe to drop with keep='first'.
+# df2 duplicates are the same paper in different capitalisation (e.g. ALL CAPS
+# vs title case); they share a join key after cleaning.
 dup2_count = df2.duplicated(subset="_join_key", keep="first").sum()
 print(f"  df2 duplicates found: {dup2_count}")
 df2 = df2.drop_duplicates(subset="_join_key", keep="first").reset_index(drop=True)
 print(f"  df2 after dedup: {len(df2):,} rows")
 
 
-# In[15]:
-
-
-# ════════════════════════════════════════════════════════════════
-# STEP 2 · Merge the two datasets
-# ════════════════════════════════════════════════════════════════
+# Step 2: merge the two datasets
 print("\nMerging df1 and df2 on cleaned title...")
  
 merged = pd.merge(
@@ -115,35 +101,29 @@ merged = pd.merge(
     validate="one_to_one", 
 )
  
-# Sanity check: every row in df2 must have a wos_id after merge
+# Nearly every df2 row must have matched a WoS record.
 match_rate = merged["UT (Unique WOS ID)"].notna().mean()
 print(f"  Merge match rate: {match_rate:.4%}")
 assert match_rate > 0.999, f"Match rate too low ({match_rate:.2%}), aborting."
 print(f"  Merged rows: {len(merged):,}")
  
-# Derive is_review from the ReviewFlag column
+# is_review comes from ReviewFlag
 merged["is_review"] = merged["ReviewFlag"].str.strip().str.lower() == "review"
 print(f"  Reviews flagged: {merged['is_review'].sum():,}")
  
-# Combine both keyword fields into one (separated by "; ")
+# Author Keywords and Keywords Plus joined with "; "
 merged["keywords_combined"] = (
     merged["Author Keywords"].fillna("") + "; " + merged["Keywords Plus"].fillna("")
 ).str.strip("; ")
 merged.loc[merged["keywords_combined"] == "", "keywords_combined"] = None
 
 
-# In[16]:
-
-
-# ════════════════════════════════════════════════════════════════
-# STEP 3 · Prepare rows for each database table
-# ════════════════════════════════════════════════════════════════
+# Step 3: prepare rows for each table
 print("\nPreparing database rows...")
  
 run_id = uuid.uuid4()
  
-# --- papers table ---
-# Publication Year comes from df2 (only one copy in the merged frame).
+# papers rows (Publication Year comes from df2)
 merged["pub_year_final"] = merged["Publication Year"]
  
 papers_rows = []
@@ -162,21 +142,20 @@ for _, r in merged.iterrows():
         bool(r["is_review"]),
         str(r["Source Title"]).strip() if pd.notna(r["Source Title"]) else None,
         int(r["Times Cited, WoS Core"]) if pd.notna(r["Times Cited, WoS Core"]) else 0,
-        # NaN in Open Access Designations means the paper is NOT open access
-        # — fill these with 'Closed' so the field is queryable.
+        # A blank Open Access Designations value means not open access: stored as 'Closed'.
         str(r["Open Access Designations"]).strip() if pd.notna(r["Open Access Designations"]) else "Closed",
         str(r["Author Full Names"]).strip() if pd.notna(r["Author Full Names"]) else None,
         str(r["Affiliations"]).strip() if pd.notna(r["Affiliations"]) else None,
     ))
 print(f"  papers rows: {len(papers_rows):,}")
  
-# --- classifications table ---
+# classifications rows
 classifications_rows = []
 for _, r in merged.iterrows():
     wos_id = str(r["UT (Unique WOS ID)"]).strip()
     decision = str(r["Decision"]).strip() if pd.notna(r["Decision"]) else None
  
-    # Only populate category/ES/technology when Decision='Y'
+    # category, ecosystem service and technology are kept only when Decision is Y
     if decision == "Y":
         category = str(r["Category"]).strip() if pd.notna(r["Category"]) else None
         es       = str(r["EcosystemService"]).strip() if pd.notna(r["EcosystemService"]) else None
@@ -200,12 +179,7 @@ for _, r in merged.iterrows():
 print(f"  classifications rows: {len(classifications_rows):,}")
 
 
-# In[17]:
-
-
-# ════════════════════════════════════════════════════════════════
-# STEP 4 · Write to PostgreSQL 
-# ════════════════════════════════════════════════════════════════
+# Step 4: write to PostgreSQL
 print(f"\nConnecting to database...")
 conn = psycopg2.connect(DB_URI)
 cur  = conn.cursor()
@@ -213,7 +187,7 @@ cur  = conn.cursor()
 try:
     start_time = datetime.now(timezone.utc)
  
-    # ── 4a. datasets ──────────────────────────────────────────
+    # datasets
     print("  Writing datasets...")
     cur.execute(
         """INSERT INTO datasets (source, version, record_count)
@@ -224,15 +198,14 @@ try:
     dataset_id = cur.fetchone()[0]
     print(f"    dataset_id = {dataset_id}")
  
-    # Patch dataset_id into every paper's row (index 2 in the tuple).
-    # Each tuple now has 16 elements (original 11 + 5 new columns).
+    # Fill dataset_id (tuple index 2) in every papers row; each row has 16 elements.
     papers_rows = [
         (r[0], r[1], dataset_id, r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10],
          r[11], r[12], r[13], r[14], r[15])
         for r in papers_rows
     ]
 
-    # ── 4b. papers ────────────────────────────────────────────
+    # papers
     print("  Writing papers...")
     papers_sql = """
         INSERT INTO papers
@@ -246,7 +219,7 @@ try:
     papers_written = cur.rowcount
     print(f"    Inserted: {papers_written:,} rows (note: shows last batch only, use Step 5 to verify total)")
  
-    # ── 4c. classifications ───────────────────────────────────
+    # classifications
     print("  Writing classifications...")
     class_sql = """
         INSERT INTO classifications
@@ -258,7 +231,7 @@ try:
     class_written = cur.rowcount
     print(f"    Inserted: {class_written:,} rows")
  
-    # ── 4d. pipeline_runs ─────────────────────────────────────
+    # pipeline_runs
     end_time = datetime.now(timezone.utc)
     print("  Writing pipeline_runs...")
     cur.execute(
@@ -271,7 +244,7 @@ try:
          MODEL_VERSION, PROMPT_VERSION)
     )
  
-    # ── Commit everything at once ─────────────────────────────
+    # Commit all four tables together
     conn.commit()
     print(f"\n✓ All done. Committed in {(end_time - start_time).total_seconds():.1f}s.")
     print(f"  dataset_id:        {dataset_id}")
@@ -290,12 +263,7 @@ finally:
     print("  Connection closed.")
 
 
-# In[18]:
-
-
-# ════════════════════════════════════════════════════════════════
-# STEP 5 · Quick verification queries
-# ════════════════════════════════════════════════════════════════
+# Step 5: verification queries
 print("\nRunning verification queries...")
 conn = psycopg2.connect(DB_URI)
 cur  = conn.cursor()
@@ -323,7 +291,7 @@ for label, sql in checks:
     val = cur.fetchone()[0]
     print(f"  {label:30s} {val:>10,}")
 
-# The numbers we expect (Post-deduplication Gold Standard):
+# Expected totals after de-duplication:
 #   Total papers:            68,917
 #   Non-review papers:       59,599
 #   Decision = Y (All):      35,433
