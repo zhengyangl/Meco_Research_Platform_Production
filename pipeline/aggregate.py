@@ -1,5 +1,18 @@
 """
-Aggregation
+Build the dashboard data files from the Postgres corpus.
+
+Runs as a script (all work happens at import). Requires DATABASE_URL and writes
+JSON and parquet files to ./dashboard_data (relative to the working directory):
+the narrative JSONs (corpus_meta, services_summary, annual_by_category, country_oa,
+support_spotlight, wos_discovery, wos_cooccurrence, framing_discovery, framing)
+and the Explorer parquet files (papers_classified, abstracts).
+
+Narrative outputs read classifications_narrative_snapshot; the Explorer parquet
+files read all current rows of classifications.
+
+Usage:
+    export DATABASE_URL="postgresql://user:password@host:5432/dbname"
+    python aggregate.py
 """
 import json
 import os
@@ -11,12 +24,7 @@ import pandas as pd
 import psycopg2
 
 
-# In[3]:
-
-
-# ══════════
-# CONFIG
-# ══════════
+# Configuration
 import os as _os
 DB_URI = _os.environ.get("DATABASE_URL")
 if not DB_URI:
@@ -28,24 +36,11 @@ if not DB_URI:
 OUTPUT_DIR = Path("dashboard_data")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# ══════════════════════════════════════════════════════════════════
-# LEGACY vs. LIVE DATA SPLIT (confirmed design, Aug 2026)
-# ══════════════════════════════════════════════════════════════════
-# The narrative page's published statistics must stay fixed even as new
-# papers flow into the database — only the Explorer grows. This is
-# enforced here, not in app.py: every narrative-facing query below is
-# filtered to LEGACY_DATASET_IDS; only STEP 6 (papers_classified.parquet,
-# which feeds the Explorer) reads the full unfiltered corpus.
-#
-# LEGACY_DATASET_IDS must be filled in with the dataset_id(s) from the
-# original ingest_initial.py run(s) that produced the published 68,917-
-# paper / 31,559-target-corpus numbers. Find it with:
-#
-#   SELECT dataset_id, source, version, import_date, record_count
-#   FROM datasets ORDER BY import_date;
-#
-# The historical load should be a single row — take that dataset_id.
-LEGACY_DATASET_IDS = [1]  # confirmed Aug 2026: matches all published figures exactly
+# Narrative outputs must not change when incremental papers are ingested: they read
+# classifications_narrative_snapshot, and the corpus_meta paper counts filter on
+# LEGACY_DATASET_IDS (dataset_id of the original historical load). Only the Explorer
+# files (STEP 6, 6b) read all current classifications.
+LEGACY_DATASET_IDS = [1]
 
 if not LEGACY_DATASET_IDS:
     raise ValueError(
@@ -59,13 +54,7 @@ if not LEGACY_DATASET_IDS:
     )
 
 
-# In[11]:
-
-
-# ═══════════════════════════
-# THE 22 ECOSYSTEM SERVICES
-# ═══════════════════════════
-
+# (service, category) pairs; also the whitelist of valid ecosystem_service values.
 SERVICES_DEF = [
     ("Biochemicals",            "Provisioning"),
     ("Fibre/Hide/Wood",         "Provisioning"),
@@ -94,35 +83,17 @@ VALID_SERVICES = {name for name, _ in SERVICES_DEF}
 SERVICE_TO_CATEGORY = dict(SERVICES_DEF)
 
 
-# In[12]:
-
-
-# ════════
-# Helper
-# ════════
 def write_json(path: Path, payload: dict):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
 
 
-# In[13]:
-
-
-# ═══════════════════════
-# STEP 0 Connect
-# ═══════════════════════
-
+# STEP 0: database connection
 t0 = time.time()
 conn = psycopg2.connect(DB_URI)
 
 
-# In[14]:
-
-
-# ════════════════════════════════════════════════════════════════
-# STEP 1 corpus_meta.json — top-level funnel
-# ════════════════════════════════════════════════════════════════
-
+# STEP 1: corpus_meta.json
 meta_sql = """
 SELECT
     COUNT(*)                                                       AS total_papers,
@@ -136,7 +107,6 @@ total      = int(meta_df["total_papers"][0])
 non_review = int(meta_df["non_review"][0])
 reviews    = int(meta_df["reviews"][0])
  
-# Decision=Y count needs the classifications join
 decision_y_sql = """
 SELECT COUNT(*) AS decision_y
 FROM papers p
@@ -166,15 +136,7 @@ write_json(OUTPUT_DIR / "corpus_meta.json", meta)
 print(f"  total={total:,}  non_review={non_review:,}  decision_y={decision_y:,}")
 
 
-# In[15]:
-
-
-# ══════════════════════════════════════════════════════
-# STEP 2 services_summary.json — 22 services × R/E/S
-# ══════════════════════════════════════════════════════
- 
-# One row per (ecosystem_service, category) combo, filtered to non-review
-# Y papers in the whitelist.
+# STEP 2: services_summary.json
 svc_sql = """
 SELECT
     c.ecosystem_service,
@@ -189,7 +151,6 @@ GROUP BY c.ecosystem_service, c.category
 """
 raw = pd.read_sql(svc_sql, conn, params=(list(VALID_SERVICES),))
  
-# Pivot to wide form: one row per service, three columns (R/E/S)
 pivot = raw.pivot_table(
     index="ecosystem_service",
     columns="category",
@@ -198,14 +159,12 @@ pivot = raw.pivot_table(
     fill_value=0,
 ).rename_axis(columns=None)
  
-# Make sure all three columns exist even if a paradigm is empty for some service
+# Ensure all three paradigm columns exist even if one has no rows.
 for col in ("Replace", "Enhance", "Support"):
     if col not in pivot.columns:
         pivot[col] = 0
  
-# Build the services list in the canonical SERVICES_DEF order. Any service
-# defined but with zero papers (e.g. Spiritual, Cultural Identity) appears
-# as a real row with zeros.
+# Emit services in SERVICES_DEF order; services with no papers get zero counts.
 
 services_list = []
 for svc_name, svc_category in SERVICES_DEF:
@@ -225,7 +184,6 @@ for svc_name, svc_category in SERVICES_DEF:
         "support":  support_n,
     })
  
-# Category-level and paradigm-level rollups
 category_totals = {}
 paradigm_totals = {"replace": 0, "enhance": 0, "support": 0}
 for s in services_list:
@@ -243,7 +201,7 @@ summary = {
 }
 write_json(OUTPUT_DIR / "services_summary.json", summary)
  
-# Sanity check
+# Sanity check against STEP 1 decision_y.
 assert summary["grand_total"] == decision_y, (
     f"Mismatch: grand_total={summary['grand_total']} vs decision_y={decision_y}. "
     "Likely cause: ecosystem_service value in classifications not in SERVICES_DEF."
@@ -254,10 +212,7 @@ print(f"  Paradigms — Replace: {paradigm_totals['replace']:,}  "
       f"Enhance: {paradigm_totals['enhance']:,}  Support: {paradigm_totals['support']:,}")
 
 
-# ════════════════════════════════════════════════════════════════
-# STEP 3 annual_by_category.json — year × R/E/S for the narrative
-# ════════════════════════════════════════════════════════════════
-# One row per (pub_year, category) with non-review Decision=Y papers only.
+# STEP 3: annual_by_category.json
 
 annual_sql = """
 SELECT
@@ -275,7 +230,6 @@ ORDER BY p.pub_year, c.category
 """
 annual_raw = pd.read_sql(annual_sql, conn, params=(list(VALID_SERVICES),))
 
-# Pivot: rows = year, columns = Replace/Enhance/Support
 annual_pivot = annual_raw.pivot_table(
     index="pub_year", columns="category", values="n",
     aggfunc="sum", fill_value=0,
@@ -295,9 +249,7 @@ write_json(OUTPUT_DIR / "annual_by_category.json", annual_data)
 print(f"  Years: {annual_data['years'][0]}–{annual_data['years'][-1]}  "
       f"({len(annual_data['years'])} years)")
 
-# ════════════════════════════════════════════════════════════════
-# STEP 4 country_oa.json — country × open-access for the map
-# ════════════════════════════════════════════════════════════════
+# STEP 4: country_oa.json
 country_sql = """
 SELECT
     (SELECT pf.feature_val
@@ -318,13 +270,11 @@ WHERE p.is_review = FALSE
 country_raw = pd.read_sql(country_sql, conn, params=(list(VALID_SERVICES),))
 country_raw = country_raw.dropna(subset=["country_first"])
 
-# is_open: True when open_access has a non-null value other than 'Closed'
 country_raw["is_open"] = (
     country_raw["open_access"].notna() & (country_raw["open_access"] != "Closed")
 )
 
-# Aggregate per country, then keep top 25 by Replace paper count —
-# past that the bubble map gets crowded and unreadable.
+# Keep the top 25 countries by Replace paper count (map readability).
 country_agg = country_raw.groupby("country_first").agg(
     replace_papers=("is_open", "size"),
     open_papers=("is_open", "sum"),
@@ -334,9 +284,7 @@ country_agg["open_access_pct"] = (
 ).round(1)
 country_agg = country_agg.sort_values("replace_papers", ascending=False).head(25)
 
-# Global North / Global South split (traditional UN M49). WoS country_first
-# values not listed here default to "Global South", which is the safer bias
-# for coverage of newly emerging producers.
+# Countries not listed in GLOBAL_NORTH are labelled "Global South".
 GLOBAL_NORTH = {
     "USA", "United States", "United States of America",
     "Canada",
@@ -367,10 +315,7 @@ country_oa = {
 write_json(OUTPUT_DIR / "country_oa.json", country_oa)
 print(f"  Countries: {len(country_list)} (top-25 by Replace papers)")
 
-# ════════════════════════════════════════════════════════════════
-# STEP 5 support_spotlight.json — top-cited Support paper per curated service
-# ════════════════════════════════════════════════════════════════
-
+# STEP 5: support_spotlight.json (top-cited Support paper per curated service)
 SPOTLIGHT_SERVICES = [
     "Coastline Regulation",
     "Primary Production",
@@ -378,8 +323,7 @@ SPOTLIGHT_SERVICES = [
     "Water Regulation",
 ]
 
-# ROW_NUMBER() partitioned by service picks the top-cited paper per service;
-# tie-breaker is more recent publication year.
+# Ties on times_cited are broken by most recent pub_year.
 spotlight_sql = """
 SELECT * FROM (
     SELECT
@@ -403,11 +347,9 @@ WHERE rk = 1
 spot_top = pd.read_sql(spotlight_sql, conn, params=(SPOTLIGHT_SERVICES,))
 
 def _first_author(authors_val):
-    """Best-effort first-author extraction from a WoS authors field."""
+    """First author from a ';' or '|' separated authors field ('' if missing)."""
     if pd.isna(authors_val) or not authors_val:
         return ""
-    # WoS `authors` fields are typically pipe- or semicolon-separated; take
-    # whatever comes before the first delimiter.
     for sep in (";", "|"):
         if sep in authors_val:
             first = authors_val.split(sep)[0].strip()
@@ -441,12 +383,8 @@ spotlight_out = {
 write_json(OUTPUT_DIR / "support_spotlight.json", spotlight_out)
 print(f"  Spotlight services: {len(spotlight_list)}/{len(SPOTLIGHT_SERVICES)}")
 
-# In[16]:
 
-# ════════════════════════════════════════════════════════════════
-# STEP 6 papers_classified.parquet — explorer-grade row-level data
-# ════════════════════════════════════════════════════════════════
- 
+# STEP 6: papers_classified.parquet (Explorer; all current classifications)
 papers_sql = """
 SELECT
     p.wos_id,
@@ -544,12 +482,11 @@ WHERE p.is_review = FALSE
 """
 papers_df = pd.read_sql(papers_sql, conn, params=(list(VALID_SERVICES),))
  
-# Add the 4-family category derived from the whitelist mapping.
+# Service family from SERVICES_DEF.
 papers_df["service_category"] = papers_df["ecosystem_service"].map(SERVICE_TO_CATEGORY)
 
-# Separate, unfiltered decision_y for THIS step's own sanity check — STEP 6
-# intentionally reads ALL current data (Explorer), not just legacy, so it
-# must not be checked against the legacy-only `decision_y` from STEP 1.
+# This step reads all current classifications, so it is checked against its own
+# count rather than the STEP 1 decision_y.
 decision_y_all_sql = """
 SELECT COUNT(*) AS decision_y_all
 FROM papers p
@@ -561,7 +498,6 @@ WHERE p.is_review = FALSE
 """
 decision_y_all = int(pd.read_sql(decision_y_all_sql, conn, params=(list(VALID_SERVICES),))["decision_y_all"][0])
  
-# Column order for the explorer
 COLUMN_ORDER = [
     "wos_id", "doi", "title", "pub_year",
     "source_title", "times_cited", "open_access",
@@ -578,14 +514,10 @@ COLUMN_ORDER = [
 ]
 papers_df = papers_df[COLUMN_ORDER]
  
-# Cast pub_year/times_cited to nullable Int (so missing values become <NA>
-# instead of NaN floats — cleaner for the Streamlit explorer).
+# Nullable Int64 so missing values are <NA> rather than float NaN.
 papers_df["pub_year"]    = papers_df["pub_year"].astype("Int64")
 papers_df["times_cited"] = papers_df["times_cited"].astype("Int64")
  
-# Sanity — compare against decision_y_all (unfiltered), NOT the legacy-only
-# decision_y computed in STEP 1. This step is the one place in the file
-# that's supposed to include incremental data.
 assert len(papers_df) == decision_y_all, (
     f"Row count mismatch: parquet={len(papers_df)} vs decision_y_all={decision_y_all}"
 )
@@ -599,13 +531,7 @@ print(f"  Cols: {len(papers_df.columns)}  -> {COLUMN_ORDER}")
 print(f"  Size: {size_mb:.1f} MB (snappy-compressed parquet)")
 
 
-# ════════════════════════════════════════════════════════════════
-# STEP 6b abstracts.parquet — Explorer's lazy-loaded abstract export
-# ════════════════════════════════════════════════════════════════
-# Same scope as STEP 6 (unfiltered by dataset_id — Explorer needs ALL
-# current data, not just legacy). Kept as a separate file rather than a
-# column on papers_classified.parquet so the main Explorer grid stays fast;
-# abstracts are only loaded when a row is expanded or exported.
+# STEP 6b: abstracts.parquet (same rows as STEP 6 that have an abstract)
 abstracts_sql = """
 SELECT p.wos_id, p.abstract
 FROM papers p
@@ -627,26 +553,14 @@ print(f"  Rows: {len(abstracts_df):,} (of {len(papers_df):,} explorer papers —
 print(f"  Size: {abstracts_size_mb:.1f} MB (snappy-compressed parquet)")
 
 
-# In[17]:
-
-
-# ════════════════════════════════════════════════════════════════
-# Discovery_1 — wos_discovery.json
-# ════════════════════════════════════════════════════════════════
-# We output the top WoS categories, their R/E/S paradigm mix, and pairwise co-occurrence counts. 
-# And then decide 
-# (a) which categories to feature as nodes
-# (b) how to cluster them (Engineering / Ecology / Bridge)
-# (c) how to name them for display. 
+# wos_discovery.json: top WoS categories, paradigm mix and pairwise co-occurrence
 
 from collections import Counter
 from itertools import combinations
 
 TOP_N_DISCOVERY = 25
 
-# Legacy-only slice — the discipline network chart (§3) is narrative-facing
-# and must not shift when incremental papers are added, same rule as every
-# other narrative JSON in this file.
+# Reads the narrative snapshot, so the output is unaffected by incremental papers.
 legacy_discovery_sql = """
 SELECT
     p.wos_id,
@@ -669,7 +583,6 @@ WHERE p.is_review = FALSE
 _legacy_papers_df = pd.read_sql(legacy_discovery_sql, conn, params=(list(VALID_SERVICES),))
 
 
-# Parse each paper's wos_categories_parsed into a list of category names.
 def _split_wos(val):
     if pd.isna(val) or not val:
         return []
@@ -678,8 +591,7 @@ def _split_wos(val):
 _disc_df = _legacy_papers_df[["wos_categories_parsed", "category"]].copy()
 _disc_df["wos_cats"] = _disc_df["wos_categories_parsed"].map(_split_wos)
 
-# --- Category frequency + paradigm mix ---
-# Explode so each row = one (paper, category) pair, then group by category.
+# One row per (paper, WoS category) pair.
 _exp = _disc_df.explode("wos_cats").dropna(subset=["wos_cats"])
 cat_stats = _exp.groupby("wos_cats").agg(
     n_papers  = ("category", "size"),
@@ -691,16 +603,13 @@ cat_stats = _exp.groupby("wos_cats").agg(
 top_cats     = cat_stats.head(TOP_N_DISCOVERY).copy()
 top_cats_set = set(top_cats["wos_cats"])
 
-# --- Pairwise co-occurrence within the top-N set ---
-# For each paper, take the subset of its categories that are in top-N,
-# then add every unordered pair to the co-occurrence counter.
+# Co-occurrence counts for unordered pairs of top-N categories within a paper.
 cooccur = Counter()
 for cats in _disc_df["wos_cats"]:
     in_top = sorted({c for c in cats if c in top_cats_set})
     for a, b in combinations(in_top, 2):
         cooccur[(a, b)] += 1
 
-# --- Build JSON payload ---
 categories_out = []
 for _, row in top_cats.iterrows():
     total_para = int(row["n_replace"] + row["n_enhance"] + row["n_support"])
@@ -735,7 +644,6 @@ discovery_out = {
 }
 write_json(OUTPUT_DIR / "wos_discovery.json", discovery_out)
 
-# --- Human-readable summary to stdout ---
 print(f"\n── WoS discovery · top {TOP_N_DISCOVERY} categories ──")
 print(f"{'#':>2}  {'category':<45s}  {'papers':>7}  {'R':>5}  {'E':>5}  {'S':>5}  dom")
 for i, c in enumerate(categories_out, 1):
@@ -748,44 +656,9 @@ for e in edges_out[:25]:
     print(f"  {e['a'][:38]:<38s}  ↔  {e['b'][:38]:<38s}  {e['cooccur']:>6,}")
 
 
-# ════════════════════════════════════════════════════════════════
-# Section 7 wos_cooccurrence.json —  data for the network chart
-# ════════════════════════════════════════════════════════════════
-# Consumes the same discovery data structures from the step above, but
-# curates them for the narrative dashboard's §3 chart:
-# - Restricts to the top-N most-published WoS categories (N=25 here;
-#     narrative filters further down at render time).
-# - Assigns each to a hand-picked cluster.
-# - Keeps only edges where both endpoints are top-N and co-occurrence
-#     is at or above EDGE_THRESHOLD papers.
-#
-# ── Cluster assignment map ─────────────────────────────────────
-# The three clusters below are defined by three joint properties
-# visible in the discovery table:
-#
-#   • Hard-Sci        
-#       — Materials + Chemistry + Physics + Nano + Polymer:
-#       - Replace-dominant paradigm mix (60–83%)
-#       - Extremely dense mutual co-occurrence (1,500–4,246 papers)
-#       - Study non-living matter (molecules, crystals, particles, materials)
-#
-#   • Bio-Applied     
-#       — Biomaterials + Biomedical/Cell/Tissue Eng, Biotech, Biochemistry, Cell Biology, Biophysics, Pharmacology:
-#       - Enhance-dominant or balanced (45–52%)
-#       - Form a coherent secondary cluster (e.g. Cell&Tissue Eng ↔
-#         Biomedical Eng = 516; Cell Bio ↔ Biomedical Eng = 456)
-#       - Study biological entities BUT with the goal of translating them
-#         into materials / devices / drugs. This is distinct from Ecology or
-#         Conservation Biology, which study biological systems as systems.
-#         Neither Ecology nor Conservation Biology appear in the top 25.
-#
-#   • Applied-Eng     
-#     — Robotics + Engineering Chemical/Environmental/Multi,
-#                       Energy & Fuels, Multidisciplinary Sciences:
-#       - Small volume (500–1,700 papers)
-#       - Applied to specific engineering domains
-#       - Loosely connected to both hard-sci and bio-applied
-
+# wos_cooccurrence.json: network nodes and edges built from the discovery data above.
+# Clusters are hand-assigned; edges need both endpoints in the top-N nodes and
+# co-occurrence >= EDGE_THRESHOLD_NET.
 CLUSTER_MAP = {
     "Materials Science, Multidisciplinary": "Hard-Sci",
     "Chemistry, Multidisciplinary":         "Hard-Sci",
@@ -816,7 +689,7 @@ CLUSTER_MAP = {
     "Energy & Fuels":                       "Applied-Eng",
 }
 
-# Short display names for chart labels (WoS raw names are too long).
+# Short chart labels for WoS category names.
 DISPLAY_NAMES = {
     "Materials Science, Multidisciplinary": "Materials Sci.",
     "Chemistry, Multidisciplinary":         "Chemistry",
@@ -846,13 +719,11 @@ DISPLAY_NAMES = {
 }
 
 EDGE_THRESHOLD_NET = 200        # min co-occurrences to keep an edge
-TOP_N_NET          = 25         # bake top-N into the output; narrative filters further
+TOP_N_NET          = 25         # number of top categories used as nodes
 
-# Pick top-N by paper count from the already-computed discovery data
 _net_cats = categories_out[:TOP_N_NET]
 _net_names = {c["raw_name"] for c in _net_cats}
 
-# Assemble node records with cluster + display metadata
 nodes_net = []
 for c in _net_cats:
     raw = c["raw_name"]
@@ -871,7 +742,6 @@ for c in _net_cats:
         "support_pct":       c["support_pct"],
     })
 
-# Filter edges: both endpoints in top-N and co-occur >= threshold
 edges_net = []
 for e in edges_out:
     if e["a"] in _net_names and e["b"] in _net_names and e["cooccur"] >= EDGE_THRESHOLD_NET:
@@ -884,7 +754,7 @@ for e in edges_out:
             "cross":   a_cluster != b_cluster,
         })
 
-# Ecological absence stat — used as evidence in the caption
+# eco_absence.pure_ecology_present is hardcoded False, not computed.
 env_eng_papers = next((c["n_papers"] for c in categories_out
                        if c["raw_name"] == "Engineering, Environmental"), 0)
 env_eng_rank = next((i + 1 for i, c in enumerate(categories_out)
@@ -906,23 +776,11 @@ net_out = {
 write_json(OUTPUT_DIR / "wos_cooccurrence.json", net_out)
 print(f"  Network nodes: {len(nodes_net)}, edges (≥{EDGE_THRESHOLD_NET}): {len(edges_net)}")
 
-# ════════════════════════════════════════════════════════════════
-# Discovery_2 — framing_discovery.json
-# ════════════════════════════════════════════════════════════════
-# Methodology:
-#   • Two-way comparison. Enhance excluded (goal is contrast).
-#   • Simple regex tokenisation on lowercased abstracts.
-#   • Two stopword lists: (a) standard English, (b) academic
-#     boilerplate ("study", "propose", "show", "however"…). Both
-#     inline below so anyone reading aggregate.py sees the method.
-#   • Unigrams stemmed via a minimal suffix stripper (only -s/-es/
-#     -ies/-ed/-ing). Display form = most-common surface form per stem.
-#   • Bigrams kept in surface form; Julian can merge variants at
-#     review time.
-#   • Minimum count filter: 100 total (unigrams), 50 total (bigrams).
-#     Anything below is noise given the small Support corpus.
-#   • Ranking metric: log-ratio between per-1k frequencies, with
-#     +0.1 Laplace smoothing so zero counts don't blow up.
+# framing_discovery.json: terms that distinguish Replace from Support abstracts
+# (Enhance excluded). Abstracts are lowercased and regex-tokenised; stopwords are
+# dropped before bigrams are formed. Unigrams are stemmed with simple_stem, bigrams
+# keep surface forms. Terms need a minimum total count and are ranked by the
+# log-ratio of per-1k frequencies.
 
 import re
 import math
@@ -933,7 +791,6 @@ MIN_TOTAL_UNIGRAM  = 100
 MIN_TOTAL_BIGRAM   = 50
 TOP_PER_SIDE       = 20
 
-# ── Stopword lists ──────────────────────────────────────────────
 STANDARD_STOPWORDS = {
     "a", "an", "the",
     "i", "you", "he", "she", "it", "we", "they",
@@ -1005,12 +862,8 @@ PAPER_STOPWORDS = {
 STOPWORDS = STANDARD_STOPWORDS | PAPER_STOPWORDS
 
 
-# -------Stemming & Surface Form-------------
 def simple_stem(word):
-    """Trim only the safe suffixes: -s/-es/-ies/-ed/-ing. This handles
-    engineering/engineered/engineers→'engineer' and design/designs/designed
-    →'design'. It does NOT handle -y/-ical/-able because those often
-    introduce false conflations at this scale."""
+    """Strip one common suffix (ing, ies, ed, es, s ...); words under 5 chars unchanged."""
     if len(word) < 5:
         return word
     for suf in ("ings", "ing", "ies", "ied", "eds", "ed", "es", "s"):
@@ -1019,7 +872,6 @@ def simple_stem(word):
     return word
 
 
-# ── Fetch subcorpora ────────────────────────────────────────────
 framing_sql = """
 SELECT p.wos_id, p.abstract, c.category
 FROM papers p
@@ -1038,7 +890,6 @@ print(f"  Replace abstracts: {n_replace:,}  ·  Support abstracts: {n_support:,}
 print(f"  (filtered to length ≥ {MIN_ABSTRACT_CHARS} chars)")
 
 
-# ── Tokenise + count ────────────────────────────────────────────
 uni_counts = {"Replace": Counter(), "Support": Counter()}
 bi_counts  = {"Replace": Counter(), "Support": Counter()}
 stem_forms = defaultdict(Counter)   # stem -> {surface_form: count}
@@ -1056,8 +907,8 @@ for _, row in fr_raw.iterrows():
         bi_counts[row["category"]][f"{tokens[i]} {tokens[i+1]}"] += 1
 
 
-# ------Log-Ratio Scoring-----------
 def rank_terms(cr_map, cs_map, min_total):
+    """Score terms (total count >= min_total) by smoothed Replace/Support log-ratio."""
     all_terms = set(cr_map) | set(cs_map)
     out = []
     for t in all_terms:
@@ -1067,7 +918,7 @@ def rank_terms(cr_map, cs_map, min_total):
             continue
         rpk = cr / n_replace * 1000
         spk = cs / n_support * 1000
-        log_r = math.log((rpk + 0.1) / (spk + 0.1))  # Log-ratio with Laplace smoothing
+        log_r = math.log((rpk + 0.1) / (spk + 0.1))  # +0.1 smoothing for zero counts
         out.append({
             "term":            t,
             "display":         stem_forms[t].most_common(1)[0][0]
@@ -1087,17 +938,17 @@ bi_stats  = rank_terms(bi_counts["Replace"],  bi_counts["Support"],  MIN_TOTAL_B
 
 
 def top_each_side(stats, n):
+    """Return the n highest (Replace) and n lowest (Support) log_ratio terms."""
     sorted_by_ratio = sorted(stats, key=lambda x: x["log_ratio"])
     support_leaning = sorted_by_ratio[:n]              # most negative
     replace_leaning = sorted_by_ratio[-n:][::-1]       # most positive
     return replace_leaning, support_leaning
 
 
-# ── Extract final features for the narrative chart ─────
+# Bigrams use half as many terms per side as unigrams.
 r_uni, s_uni = top_each_side(uni_stats, TOP_PER_SIDE)
 r_bi,  s_bi  = top_each_side(bi_stats,  TOP_PER_SIDE // 2)
 
-# ── Write JSON ──────────────────────────────────────────────────
 framing_disc = {
     "n_replace_abstracts": n_replace,
     "n_support_abstracts": n_support,
@@ -1115,7 +966,6 @@ framing_disc = {
 write_json(OUTPUT_DIR / "framing_discovery.json", framing_disc)
 
 
-# ── Human-readable summary ──────────────────────────────────────
 def _print_side(rows):
     print(f"  {'term':<25s} {'R/1k':>7s} {'S/1k':>7s} {'log_r':>7s} {'total':>7s}")
     for r in rows:
@@ -1134,11 +984,9 @@ _print_side(s_bi)
 
 
 
-# ════════════════════════════════════════════════════════════════
-# Section 8 framing.json — for framing chart
-# ════════════════════════════════════════════════════════════════
+# framing.json: curated words for the framing chart
 FRAMING_WORDS = [
-    # ── Replace-leaning (7) ──────────────────────────────────────
+    # Replace-leaning
     {"display": "photocatalytic",         "side": "Replace", "source": "unigram"},
     {"display": "antibacterial activity",  "side": "Replace", "source": "bigram"},
     {"display": "reactive oxygen species", "side": "Replace", "source": "bigram"},  # merges "reactive oxygen" + "oxygen species"
@@ -1146,7 +994,7 @@ FRAMING_WORDS = [
     {"display": "molecularly imprinted",   "side": "Replace", "source": "bigram"},
     {"display": "carbon nanotubes",        "side": "Replace", "source": "bigram"},
     {"display": "water contact",           "side": "Replace", "source": "bigram"},
-    # ── Support-leaning (8) ──────────────────────────────────────
+    # Support-leaning
     {"display": "drag reduction",          "side": "Support", "source": "bigram"},
     {"display": "shark skin",              "side": "Support", "source": "bigram"},
     {"display": "aerodynamic",             "side": "Support", "source": "unigram"},
@@ -1157,7 +1005,7 @@ FRAMING_WORDS = [
     {"display": "ecological",              "side": "Support", "source": "unigram"},
 ]
 
-# Load discovery data and look up each curated word's stats by display name.
+# Look up each curated word's stats in framing_discovery.json by display name.
 with open(OUTPUT_DIR / "framing_discovery.json", encoding="utf-8") as f:
     _framing_disc = json.load(f)
 
@@ -1201,9 +1049,6 @@ write_json(OUTPUT_DIR / "framing.json", framing_out)
 print(f"  Framing words: {len(framing_words_out)}/{len(FRAMING_WORDS)}")
 
 
-# ═════════════════
-# Done
-# ═════════════════
 conn.close()
 elapsed = time.time() - t0
 print(f"\n✓ All files written to {OUTPUT_DIR.resolve()}/")
