@@ -1,8 +1,10 @@
 # Environment Setup
 
-*Last updated: August 2026*
+*Last updated: October 2026*
 
 This is a one-time guide. Follow it once, in order, to go from nothing to a working server. For day-to-day operation after that, see `handover.md`.
+
+The server hosts both platforms in this repository: the MEco Research Data Platform (the narrative page and the Data Explorer, one Streamlit app, plus the PostgreSQL database and pipeline) and the BioM Innovation Database dashboard (`biom-dashboard/`, a separate Streamlit app that reads CSV files and needs no database).
 
 Everything in this guide happens in a Terminal window on your own computer, using SSH to control the remote server. If you've never used SSH or a Terminal before: it's just a text window where you type commands instead of clicking buttons. Every command below is copy-pasteable.
 
@@ -22,14 +24,14 @@ Everything in this guide happens in a Terminal window on your own computer, usin
 1. Sign in to the [AWS Console](https://console.aws.amazon.com/ec2/) and open the EC2 dashboard.
 2. Click **Launch Instance**.
 3. Choose **Ubuntu** as the operating system (any recent 22.04/24.04 LTS image).
-4. Choose an instance type. The current production server uses **t3.micro** (1 vCPU, 1 GB RAM). This is enough to run everything, but it's tight on memory — Section 5 below covers how to work around that. If you'd rather not deal with memory workarounds at all, a **t3.small** (2 GB RAM) removes the problem entirely for a small cost increase.
-5. Create a new key pair (or select an existing one) — this downloads a `.pem` file. **Save this file somewhere you won't lose it** (e.g. `~/Downloads/my-aws-key.pem`). You cannot download it again later; if you lose it, you lose access to the server.
-6. Under network settings, make sure inbound rules allow **SSH (port 22)** from your IP, at minimum. If the dashboard or Explorer will ever be accessed directly from a browser (rather than embedded elsewhere), also open the relevant port (e.g. 8501 for Streamlit's default).
+4. Choose an instance type. Use **t3.small** (2 vCPU, 2 GB RAM) for the self-hosted deployment in Section 11, which runs two Streamlit apps, PostgreSQL, and the pipeline on one machine. A **t3.micro** (1 GB RAM) can run the pipeline alone, but it's tight on memory — Section 4 covers the workaround.
+5. Create a new key pair (or select an existing one) — this downloads a `.pem` file. **Save this file somewhere you won't lose it** (e.g. `~/Downloads/my-aws-key.pem`). You cannot download it again later; if you lose it, you lose access to the server. (Alternatively, import your own SSH public key in the EC2 console and use the matching private key in place of the `.pem` file throughout this guide.)
+6. Under network settings, allow inbound **SSH (port 22)** from your IP only, plus **HTTP (80)** and **HTTPS (443)** from anywhere (needed by nginx and Let's Encrypt in Section 11). Do **not** open 8501/8502 — the Streamlit apps are reached only through nginx.
 7. Launch the instance. Wait until its state shows **Running**.
 
 Full official walkthrough if any of this is unclear: [Launch an EC2 instance — AWS documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html).
 
-**A note on the IP address:** this server does not have a fixed (Elastic) IP configured. Its public IP can change if the instance is stopped and restarted. Before connecting, check the **Public IPv4 address** field on the instance's page in the AWS Console — don't assume it's the same as last time.
+**A note on the IP address:** allocate an **Elastic IP** and associate it with the instance. Without one, the public IP changes whenever the instance is stopped and restarted, which would break the DNS records in Section 11.6. AWS charges a small hourly fee for every public IPv4 address (about $3.65/month at the published rate — confirm on the [AWS pricing page](https://aws.amazon.com/vpc/pricing/)).
 
 ---
 
@@ -41,7 +43,7 @@ Open a Terminal on your own computer.
 # Move into the folder where your .pem key file is
 cd ~/Downloads
 
-# Connect — replace with the current public IP from the AWS Console
+# Connect — replace with the server's Elastic IP
 ssh -i my-aws-key.pem ubuntu@<SERVER_PUBLIC_IP>
 ```
 
@@ -51,7 +53,7 @@ Once connected, update the system and install the basics:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git curl zip python3-pip
+sudo apt install -y git curl zip python3-pip python3-venv
 ```
 
 ---
@@ -187,11 +189,19 @@ Full reference if you want more detail: [How To Add Swap Space on Ubuntu — Dig
 sudo apt install -y python3-pip
 ```
 
-Upload `requirements.txt` and `requirements_pipeline.txt` from the repo (or clone the whole repo — see Section 6), then:
+Get the repo onto the server first (Section 6), then, from the repo folder:
 
 ```bash
+cd ~/meco_dashboard
 pip3 install -r requirements.txt --break-system-packages
 pip3 install -r requirements_pipeline.txt --break-system-packages
+```
+
+These cover the MEco platform. The BioM dashboard has its own pinned `biom-dashboard/requirements.txt` (different package versions), so it gets its own virtual environment to keep the two from interfering:
+
+```bash
+python3 -m venv ~/meco_dashboard/biom-dashboard/.venv
+~/meco_dashboard/biom-dashboard/.venv/bin/pip install -r ~/meco_dashboard/biom-dashboard/requirements.txt
 ```
 
 **`sentence-transformers` (in `requirements_pipeline.txt`) pulls in `torch`, which is large (~500 MB+).** Two things that can go wrong here, both already hit once during this project's setup:
@@ -213,14 +223,15 @@ pip3 install -r requirements_pipeline.txt --break-system-packages
 
 ## 6. Get the code onto the server
 
-Either clone the repo directly (if the server has access to it) or upload files individually with `scp`, run from your own computer:
+Clone the whole repo on the server — both platforms live in it, and the apps need more than just the scripts (`dashboard_data/`, `biom-dashboard/`, and the root `.streamlit/` folder):
 
 ```bash
-scp -i ~/Downloads/my-aws-key.pem -r pipeline/ app.py pages/ requirements*.txt \
-  ubuntu@<SERVER_PUBLIC_IP>:~/meco_pipeline/
+git clone https://github.com/zhengyangl/meco_research_platform_production.git ~/meco_dashboard
 ```
 
-Adjust paths to wherever your local copy of the repo lives.
+If the repository is private, GitHub will ask for credentials; use a personal access token with read access as the password. Every path in the rest of this guide assumes the repo is at `~/meco_dashboard`.
+
+To update the code later: `cd ~/meco_dashboard && git pull`, then restart the affected service (Section 11.4).
 
 ---
 
@@ -269,6 +280,8 @@ Official reference: [Create service accounts](https://docs.cloud.google.com/iam/
 scp -i ~/Downloads/my-aws-key.pem /path/to/your-key.json ubuntu@<SERVER_PUBLIC_IP>:~/service-account.json
 ```
 
+Then, on the server, restrict it to your user: `chmod 600 ~/service-account.json`.
+
 ### 8.4 Share each Google resource with the service account
 
 Open the downloaded JSON file and find the `client_email` field — it looks like `meco-pipeline-service@your-project-id.iam.gserviceaccount.com`.
@@ -277,7 +290,7 @@ Open the downloaded JSON file and find the `client_email` field — it looks lik
 
 ### 8.5 explorer.py's credentials go somewhere different
 
-Everything else in this section uses `GOOGLE_SERVICE_ACCOUNT_FILE` (an environment variable pointing at the JSON file). `explorer.py` is the one exception — because it runs inside Streamlit, it reads credentials from `.streamlit/secrets.toml` instead, using Streamlit's own secrets mechanism. Create this file locally (never commit it — it's in `.gitignore`):
+Everything else in this section uses `GOOGLE_SERVICE_ACCOUNT_FILE` (an environment variable pointing at the JSON file). `explorer.py` is the one exception — because it runs inside Streamlit, it reads credentials from `.streamlit/secrets.toml` instead, using Streamlit's own secrets mechanism. On the server, create it at `~/meco_dashboard/.streamlit/secrets.toml` (the folder already exists in the repo; never commit this file — it's in `.gitignore`), then run `chmod 600` on it:
 
 ```toml
 [gcp_service_account]
@@ -298,21 +311,34 @@ spreadsheet_id = "the misclassification-feedback sheet's ID — see handover.md"
 
 Every field except `private_key` is a straight copy-paste from the JSON file. For `private_key`, keep the `\n` characters exactly as they appear in the JSON — don't reformat them into real line breaks.
 
-If deploying `explorer.py` somewhere other than local development (e.g. Streamlit Community Cloud), the same TOML content goes into that platform's **Settings → Secrets** page instead of a local file.
+Streamlit reads this file from the folder the app is started in, which is why the MEco service in Section 11.4 uses the repo root as its `WorkingDirectory`. The BioM dashboard needs no secrets.
+
+If deploying `explorer.py` somewhere other than a self-hosted server (e.g. Streamlit Community Cloud), the same TOML content goes into that platform's **Settings → Secrets** page instead of a local file.
 
 ---
 
 ## 9. Set environment variables
 
-Copy `.env.example` to `.env` (or export these directly in your shell / a systemd service / cron's environment) and fill in the real values from the sections above:
+Copy `.env.example` to `.env` in the repo folder and fill in the real values from the sections above:
 
 ```bash
-export DATABASE_URL="postgresql://pipeline_user:<your DB password>@127.0.0.1:5432/me_dashboard"
-export OPENROUTER_API_KEY="<your OpenRouter key>"
-export GOOGLE_SERVICE_ACCOUNT_FILE="$HOME/service-account.json"
+cd ~/meco_dashboard
+cp .env.example .env
+nano .env
+chmod 600 .env
 ```
 
-These need to be set in whatever context actually runs the pipeline scripts — a plain SSH session's exported variables disappear when you disconnect. For anything that needs to survive across sessions or run unattended (cron, a systemd service), set them in that context specifically, not just in your interactive shell.
+```
+DATABASE_URL=postgresql://pipeline_user:<your DB password>@127.0.0.1:5432/me_dashboard
+OPENROUTER_API_KEY=<your OpenRouter key>
+GOOGLE_SERVICE_ACCOUNT_FILE=/home/ubuntu/service-account.json
+REVIEW_SHEET_ID=<review-queue sheet ID>
+FEEDBACK_SHEET_ID=<misclassification-feedback sheet ID>
+```
+
+Write plain `KEY=value` lines with no `export` and no quotes — the same file is read by systemd (`EnvironmentFile`, Section 11.4). `REVIEW_SHEET_ID` and `FEEDBACK_SHEET_ID` override the sheet IDs hardcoded in `classify.py` and `sync_feedback.py`; set them when using new copies of the sheets. The Drive folder ID is currently hardcoded as `DRIVE_FOLDER_ID` in `run_pipeline.py` and has no environment-variable override, so a new folder requires editing that line.
+
+To use these variables in an interactive SSH session (for example to run the pipeline by hand), load them first: `set -a; source ~/meco_dashboard/.env; set +a`. Variables exported in a plain SSH session disappear when you disconnect.
 
 ---
 
@@ -323,7 +349,7 @@ Work through these in order. If any step fails, stop and fix it before moving to
 - [ ] `ssh` into the server successfully
 - [ ] `psql -U pipeline_user -d me_dashboard -h 127.0.0.1 -W` connects and shows 6 tables via `\dt`
 - [ ] `pip3 list` shows `pandas`, `psycopg2`, `sentence-transformers` installed
-- [ ] `echo $DATABASE_URL` (etc.) shows the values you set, not blank
+- [ ] After loading `.env` (Section 9), `echo $DATABASE_URL` (etc.) shows the values you set, not blank
 - [ ] `python3 pipeline/classify.py --dry-run --input <any small test file>` runs without an environment-variable error (see `handover.md` for what a real dry run looks like)
 - [ ] `python3 pipeline/run_pipeline.py new-data --dry-run` successfully lists files in the Drive folder (confirms the Google service account setup works end to end)
 ---
@@ -337,13 +363,22 @@ Two platforms were evaluated and rejected before landing on this approach:
 - **Staying on Streamlit Community Cloud long-term** — free, but the free tier permanently injects two branding icons ("Hosted with Streamlit", a creator-profile badge) into the bottom-right corner of every app. There is no official way to remove them; only self-hosting outside Community Cloud removes them, since they're injected by the hosting layer itself, not the Streamlit framework.
 - **Streamlit in Snowflake (SiS)** — rejected. `explorer.py`'s main table depends entirely on AgGrid (`GridOptionsBuilder`, custom `JsCode` renderers for DOI links and paradigm color-coding), and AgGrid does not run inside SiS's sandbox — this is a known platform limitation (confirmed via Snowflake's own community forum), not something a package install fixes. Migrating would mean rewriting the Explorer's table with `st.dataframe` (losing custom cell rendering) and rebuilding the data-loading layer to read from Snowflake Stages instead of local parquet/JSON. Not worth it for this project.
 
-The plan below keeps every line of existing code unchanged — both apps run exactly as they do today, just self-hosted instead of on Community Cloud.
+The plan below keeps every line of existing code unchanged — both platforms run exactly as they do today, just self-hosted instead of on Community Cloud.
+
+**Layout.** Two Streamlit processes, one subdomain each:
+
+| Subdomain | Serves | Port | Working directory |
+|---|---|---|---|
+| `meco.manufacturedecosystems.com` | MEco narrative page (`app.py`) and Data Explorer (`pages/explorer.py`, at `/explorer`) — one app | 8501 | `~/meco_dashboard` |
+| `biom.manufacturedecosystems.com` | BioM Innovation Database (`biom-dashboard/app.py`) | 8502 | `~/meco_dashboard/biom-dashboard` |
+
+The working directory matters: Streamlit loads `.streamlit/config.toml` (and, for MEco, `secrets.toml`) from the folder it is started in, so each app must start in its own folder to get its own theme.
 
 ### 11.1 Why a domain is required (not just the server's IP)
 
 The ME website (Squarespace) is served over HTTPS. Browsers block an HTTPS page from embedding an HTTP iframe ("mixed content"). So the dashboard must also run over HTTPS — and Let's Encrypt (the free certificate authority used below) only issues certificates for domain names, never for a bare IP address.
 
-The simplest path: ask whoever manages the lab's domain to add a subdomain (e.g. `dashboard.manufacturedecosystems.com`) pointed at the EC2 server. If the domain is already owned, adding a subdomain costs nothing.
+The simplest path: ask whoever manages the lab's domain to add two subdomains (`meco` and `biom`, below) pointed at the EC2 server. If the domain is already owned, adding subdomains costs nothing.
 
 ### 11.2 Install nginx
 
@@ -352,50 +387,74 @@ sudo apt update
 sudo apt install nginx -y
 ```
 
-### 11.3 Run both apps on separate ports
+### 11.3 Confirm both apps start
 
 ```bash
-# Narrative page
-streamlit run app.py --server.port 8501
+# MEco (narrative page + Explorer) — from the repo root
+cd ~/meco_dashboard
+streamlit run app.py --server.port 8501 --server.headless true
 
-# Data Explorer
-streamlit run explorer.py --server.port 8502
+# BioM — in a second SSH window, from its own folder, using its own virtual environment
+cd ~/meco_dashboard/biom-dashboard
+.venv/bin/streamlit run app.py --server.port 8502 --server.headless true
 ```
 
-(This is just to confirm both apps start correctly on distinct ports before wiring up systemd — Ctrl+C out of these once confirmed.)
+(This is just to confirm both apps start on distinct ports before wiring up systemd — Ctrl+C out of these once confirmed.)
 
 ### 11.4 Make both apps persistent with systemd
 
 Without this, both apps stop the moment the SSH session disconnects.
 
 ```bash
-sudo nano /etc/systemd/system/meco-narrative.service
+sudo nano /etc/systemd/system/meco-dashboard.service
 ```
 
 ```ini
 [Unit]
-Description=MEco Narrative Dashboard
-After=network.target
+Description=MEco Research Data Platform (narrative + Explorer)
+After=network.target postgresql.service
 
 [Service]
 User=ubuntu
 WorkingDirectory=/home/ubuntu/meco_dashboard
-ExecStart=/usr/bin/python3 -m streamlit run app.py --server.port 8501 --server.headless true
+EnvironmentFile=/home/ubuntu/meco_dashboard/.env
+ExecStart=/usr/bin/python3 -m streamlit run app.py --server.port 8501 --server.address 127.0.0.1 --server.headless true
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Repeat for the Explorer (`meco-explorer.service`), changing the port to `8502` and the script to `explorer.py`.
+`EnvironmentFile` is what gives the Explorer its `DATABASE_URL` (Section 9). Then the BioM service:
+
+```bash
+sudo nano /etc/systemd/system/biom-dashboard.service
+```
+
+```ini
+[Unit]
+Description=BioM Innovation Database
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/meco_dashboard/biom-dashboard
+ExecStart=/home/ubuntu/meco_dashboard/biom-dashboard/.venv/bin/streamlit run app.py --server.port 8502 --server.address 127.0.0.1 --server.headless true
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+BioM reads only CSV files in `biom-dashboard/data/clean/`, so it needs no environment file.
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable meco-narrative meco-explorer
-sudo systemctl start meco-narrative meco-explorer
+sudo systemctl enable meco-dashboard biom-dashboard
+sudo systemctl start meco-dashboard biom-dashboard
 ```
 
-`Restart=always` means both apps come back automatically after a crash or server reboot — no manual restart needed.
+`Restart=always` means both apps come back automatically after a crash or server reboot — no manual restart needed. After a `git pull`, restart the affected one: `sudo systemctl restart meco-dashboard` (or `biom-dashboard`).
 
 ### 11.5 nginx reverse proxy — WebSocket headers are not optional
 
@@ -403,10 +462,12 @@ sudo systemctl start meco-narrative meco-explorer
 sudo nano /etc/nginx/sites-available/meco
 ```
 
+One `server` block per subdomain:
+
 ```nginx
 server {
     listen 80;
-    server_name dashboard.manufacturedecosystems.com;
+    server_name meco.manufacturedecosystems.com;
 
     location / {
         proxy_pass http://127.0.0.1:8501;
@@ -417,9 +478,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 86400;
     }
+}
 
-    location /explorer/ {
-        proxy_pass http://127.0.0.1:8502/;
+server {
+    listen 80;
+    server_name biom.manufacturedecosystems.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8502;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -430,7 +496,7 @@ server {
 }
 ```
 
-**The `proxy_http_version 1.1` and `Upgrade`/`Connection` lines are required, not optional.** Streamlit relies on a WebSocket connection for interactivity (filters, reruns). Without these exact lines, the page loads visually but nothing responds when clicked — a nginx config that looks "basically right" but is missing these will produce a dashboard that appears broken with no error message anywhere.
+**The `proxy_http_version 1.1` and `Upgrade`/`Connection` lines are required in both blocks, not optional.** Streamlit relies on a WebSocket connection for interactivity (filters, reruns). Without these exact lines, the page loads visually but nothing responds when clicked — a nginx config that looks "basically right" but is missing these will produce a dashboard that appears broken with no error message anywhere.
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/meco /etc/nginx/sites-enabled/
@@ -440,28 +506,46 @@ sudo systemctl restart nginx
 
 ### 11.6 DNS + HTTPS
 
-1. Have whoever controls the domain's DNS add an A record: `dashboard` → the EC2 instance's public IP.
-2. Install the certificate:
+1. Have whoever controls the domain's DNS add two A records, both pointing to the EC2 instance's Elastic IP: `meco` and `biom`. Wait until they resolve (`nslookup meco.manufacturedecosystems.com` should return the Elastic IP) before the next step — certbot fails if DNS hasn't propagated.
+2. Install the certificates:
 
 ```bash
 sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d dashboard.manufacturedecosystems.com
+sudo certbot --nginx -d meco.manufacturedecosystems.com -d biom.manufacturedecosystems.com
 ```
 
 `certbot` rewrites the nginx config for HTTPS automatically and sets up auto-renewal (Let's Encrypt certificates expire every 90 days; no manual renewal needed after this).
 
 ### 11.7 Security group
 
-In the AWS Console, confirm ports **80 and 443** are open to `0.0.0.0/0`. Ports 8501/8502 should **not** be open externally — nginx is the only thing that needs to reach them, and it does so over localhost.
+In the AWS Console, confirm ports **80 and 443** are open to `0.0.0.0/0`. Ports 8501/8502 should **not** be open externally — nginx is the only thing that needs to reach them, and it does so over localhost (the systemd units also bind them to `127.0.0.1`). SSH (22) should stay restricted to your own IP.
 
 ### 11.8 Embedding into the Squarespace site
 
 Requires a Squarespace **Business plan or higher** — the Embed/Code block used here isn't available on the Personal plan.
 
-1. Edit the target page → add an **Embed** block (or **Code** block, same effect) → paste:
+1. Edit the target page → add an **Embed** block (or **Code** block, same effect) → paste the iframe for that page.
+
+MEco narrative page:
 
 ```html
-<iframe src="https://dashboard.manufacturedecosystems.com/?embed=true"
+<iframe src="https://meco.manufacturedecosystems.com/?embed=true"
+        style="height: 1200px; width: 100%; border: none;">
+</iframe>
+```
+
+Data Explorer (a page of the same MEco app):
+
+```html
+<iframe src="https://meco.manufacturedecosystems.com/explorer?embed=true"
+        style="height: 1200px; width: 100%; border: none;">
+</iframe>
+```
+
+BioM Innovation Database:
+
+```html
+<iframe src="https://biom.manufacturedecosystems.com/?embed=true"
         style="height: 1200px; width: 100%; border: none;">
 </iframe>
 ```
@@ -474,20 +558,22 @@ Requires a Squarespace **Business plan or higher** — the Embed/Code block used
 
 | Item | Monthly cost |
 |---|---|
-| EC2 instance (t3.small, if upgraded from t3.micro) | ~$15.18 |
+| EC2 instance (t3.small) | ~$15.18 |
 | EBS storage | ~$1–3 |
+| Elastic IP (public IPv4 address) | ~$3.65 |
 | Domain/subdomain | $0 if added under an existing domain |
 | SSL certificate (Let's Encrypt) | $0 |
 | Outbound data transfer | $0 (covered by AWS's free 100GB/month tier at this project's traffic level) |
 
-Roughly **$16–20/month** total, versus $0 on Streamlit Community Cloud. Get an exact figure after a month of real usage via AWS Console → Billing → Cost Explorer, rather than relying on the estimate above — small extras (CloudWatch, EBS snapshots) sometimes show up that aren't obvious in advance.
+Roughly **$20–24/month** total, versus $0 on Streamlit Community Cloud. Get an exact figure after a month of real usage via AWS Console → Billing → Cost Explorer, rather than relying on the estimate above — small extras (CloudWatch, EBS snapshots) sometimes show up that aren't obvious in advance.
 
 ### 11.10 Verification checklist
 
-- [ ] Both `systemctl status meco-narrative` and `meco-explorer` show `active (running)`
-- [ ] `https://dashboard.manufacturedecosystems.com` loads the narrative page over HTTPS with a valid certificate (padlock icon, no browser warning)
+- [ ] Both `systemctl status meco-dashboard` and `biom-dashboard` show `active (running)`
+- [ ] `https://meco.manufacturedecosystems.com` loads the narrative page, and `https://meco.manufacturedecosystems.com/explorer` loads the Explorer, both over HTTPS with a valid certificate (padlock icon, no browser warning)
+- [ ] `https://biom.manufacturedecosystems.com` loads the BioM dashboard with its own theme and its case table
 - [ ] The Explorer's sidebar filters actually filter the table when clicked (confirms the WebSocket proxy headers are correct — if filters don't respond, revisit Section 11.5)
-- [ ] Reboot the EC2 instance and confirm both apps come back up on their own (confirms `systemctl enable` took effect)
+- [ ] Reboot the EC2 instance and confirm both apps (and PostgreSQL) come back up on their own (confirms `systemctl enable` took effect)
 - [ ] Embed the iframe on a Squarespace test page and check it at both desktop and mobile widths
 
 Once all of these pass, the environment is ready. Move on to `handover.md` for how to actually operate the platform day to day.
