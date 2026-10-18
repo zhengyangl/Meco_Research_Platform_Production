@@ -195,7 +195,10 @@ Get the repo onto the server first (Section 6), then, from the repo folder:
 cd ~/meco_dashboard
 pip3 install -r requirements.txt --break-system-packages
 pip3 install -r requirements_pipeline.txt --break-system-packages
+pip3 install "streamlit==1.66.0" --break-system-packages
 ```
+
+The last line pins Streamlit to the version this platform was tested against (1.66.0). `requirements.txt` does not pin it, and `app.py` uses `st.components.v1.html`, which Streamlit has announced it will remove in a future release — an unpinned install could pull a newer version and break the narrative page. Don't upgrade Streamlit without re-testing.
 
 These cover the MEco platform. The BioM dashboard has its own pinned `biom-dashboard/requirements.txt` (different package versions), so it gets its own virtual environment to keep the two from interfering:
 
