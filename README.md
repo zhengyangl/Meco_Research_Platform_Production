@@ -14,6 +14,15 @@ underlying research corpus growing and versioned over time.
 
 ---
 
+## Two platforms in this repository
+
+This repository contains two separate dashboards that share no database, pipeline or credentials:
+
+- **MEco Research Data Platform** ("Nature Is Not Optional"): `app.py`, `pages/`, `pipeline/`, `dashboard_data/` and `docs/`. Unless stated otherwise, this README and `docs/` describe MEco.
+- **BioM Innovation Database**: `biom-dashboard/`. A self-contained Streamlit dashboard over 510 biomimetic innovation cases; it reads CSV files only. Data cleaning is documented in `biom-dashboard/docs/data_cleaning_notes.md`.
+
+---
+
 ## Where to go next
 
 This README is a map, not the full explanation. Start here, then go to whichever of these actually answers your question:
@@ -52,9 +61,9 @@ This README is a map, not the full explanation. Start here, then go to whichever
 │   └── run_pipeline.py             # Orchestrates the pipeline — the actual entry point
 ├── dashboard_data/                 # Pre-computed JSON & Parquet, checked into git
 │   └── discovery_data/             # Reference material from chart curation, not read by the dashboard
+├── biom-dashboard/                 # BioM Innovation Database (own app.py, pipeline/, data/, docs/, requirements.txt)
 ├── llm_validation/                 # Model-selection notebooks — historical reference only
 ├── docs/
-│   ├── README.md                   # This file
 │   ├── architecture.md
 │   ├── data_dictionary.md
 │   ├── data_schema_supplement.md
@@ -63,7 +72,7 @@ This README is a map, not the full explanation. Start here, then go to whichever
 │   ├── handover.md
 │   └── How data flows through this platform.md
 ├── .streamlit/config.toml
-├── .devcontainer/devcontainer.json
+├── devcontainer.json
 ├── .env.example
 ├── .gitignore
 ├── schema.sql                      # One-time database setup — see docs/environment_setup.md
