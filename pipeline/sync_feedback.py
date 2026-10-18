@@ -1,36 +1,23 @@
 #!/usr/bin/env python
 """
-sync_feedback.py — Apply APPROVED crowd-sourced misclassification corrections
-from the Feedback Sheet (explorer.py's "Report a Misclassification" form)
-into the database.
+sync_feedback.py — Apply approved misclassification corrections from the
+Feedback Sheet (submitted via the Explorer's "Report a Misclassification" form)
+to the Postgres classifications table.
 
-Design:
-  - Only rows with review_status == "Approved" AND applied_to_db != "Yes"
-    are processed. Every other status (blank, "Rejected", "Needs More Info")
-    is left untouched — this script never guesses at an unclear row.
-  - Corrections are applied to a paper's classification regardless of which
-    dataset_id it belongs to. The narrative page's published figures are
-    computed from classifications_narrative_snapshot (a frozen copy of the
-    original corpus's results — see aggregate.py), not from live
-    classifications, so a correction here is immediately visible in the
-    Data Explorer without ever affecting the locked narrative numbers.
-  - Only category and ecosystem_service can be corrected via this sheet
-    (that's all the sheet's suggested_* columns cover). decision and
-    technology are carried forward unchanged from the paper's current
-    classification row.
-  - A correction is not an LLM call, so it's tagged model_version=
-    "human_correction" instead of a real model name — a plain display
-    value in the Explorer's "Classification Model" column.
-  - After a successful write, the sheet row's applied_to_db cell is updated
-    to "Yes" so the reviewer can see their approval took effect without
-    checking the database.
-  - Worksheet is opened via .sheet1 (gspread's "first worksheet" accessor),
-    matching how explorer.py's _get_feedback_sheet() opens the same sheet.
-  - applied_to_db's column letter is looked up from the header row at
-    runtime (see find_column_letter()) rather than hardcoded, so a future
-    column reorder in the sheet can't silently misalign the write.
-  - Wired into run_pipeline.py as the "feedback" mode
-    (`python run_pipeline.py feedback`).
+Behaviour:
+  - Processes only rows with review_status == "Approved" and applied_to_db != "Yes".
+  - A correction retires the paper's current classification row and inserts a new
+    one, regardless of dataset_id. Only category and ecosystem_service can change;
+    decision and technology are copied from the current row.
+  - Corrected rows carry model_version "human_correction", and a matching
+    classification_audit row stores the reviewer's reason.
+  - The narrative page reads classifications_narrative_snapshot, so corrections
+    here do not alter its figures.
+  - Each processed row's applied_to_db cell is written back to the sheet
+    ("Yes", "No changes to apply", or an "Error — ..." message). The column letter
+    is looked up from the header row.
+  - The sheet is opened via .sheet1, as in the Explorer's _get_feedback_sheet().
+  - Run by `python run_pipeline.py feedback`.
 
 Usage:
     export DATABASE_URL="postgresql://pipeline_user:***@127.0.0.1:5432/me_dashboard"
@@ -56,18 +43,13 @@ from psycopg2.extras import Json
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("sync_feedback")
 
-# ----------------------------------------------------------------------
-# Config
-# ----------------------------------------------------------------------
 GOOGLE_SHEETS_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
-# Carried over from handover.md. Confirmed to match explorer.py's
-# .streamlit/secrets.toml spreadsheet_id.
+# Fallback when FEEDBACK_SHEET_ID is not set.
 DEFAULT_FEEDBACK_SHEET_ID = "1NV89GAdZJfdDSRS1M5ndxjALg8YSvK94WV8iqhnPmbs"
 
-# The 22-service whitelist, from data_dictionary.md Section 1. Kept in
-# sync manually with the copy in aggregate.py / explorer.py.
+# Ecosystem service whitelist; keep in sync with the copies in aggregate.py and explorer.py.
 VALID_ECOSYSTEM_SERVICES = {
     "Biodiversity", "Food", "Potable Water", "Fuel", "Fibre/Hide/Wood", "Biochemicals",
     "Atmospheric Regulation", "Climate Regulation", "Coastline Regulation",
@@ -78,8 +60,7 @@ VALID_ECOSYSTEM_SERVICES = {
 }
 VALID_CATEGORIES = {"Support", "Enhance", "Replace"}
 
-# Free-text placeholder values (e.g. "Not sure — just flagging") that must
-# NOT be written into the database as a real category/service value.
+# Free-text placeholder answers that must not be written as a category/service.
 PLACEHOLDER_VALUES = {
     "", "not sure", "not sure — just flagging", "not sure - just flagging",
     "n/a", "na", "none", "unsure",
@@ -88,9 +69,6 @@ PLACEHOLDER_VALUES = {
 MODEL_VERSION_HUMAN = "human_correction"
 
 
-# ----------------------------------------------------------------------
-# Google Sheets
-# ----------------------------------------------------------------------
 def get_sheets_client() -> gspread.Client:
     creds_path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
     if not creds_path:
@@ -116,17 +94,13 @@ def is_placeholder(value: str) -> bool:
 
 
 def get_feedback_worksheet(sheets_client: gspread.Client):
-    """Opens the SAME worksheet explorer.py's _get_feedback_sheet() submits
-    to — via .sheet1 (gspread's "first worksheet" accessor), not a name
-    lookup, so this stays correct even if the worksheet is ever renamed."""
+    """Open the first worksheet (.sheet1), the one the Explorer submits to."""
     sheet = sheets_client.open_by_key(get_feedback_sheet_id())
     return sheet.sheet1
 
 
 def find_column_letter(worksheet, header_name: str) -> str:
-    """Looks up a column's letter (A, B, ... Z, AA, ...) from the header
-    row at runtime, instead of hardcoding a position — a column reorder in
-    the sheet then can't silently misalign a write."""
+    """Return the A1 column letter of header_name, read from row 1 (survives column reorders)."""
     headers = worksheet.row_values(1)
     if header_name not in headers:
         raise ValueError(
@@ -140,9 +114,6 @@ def find_column_letter(worksheet, header_name: str) -> str:
     return letter
 
 
-# ----------------------------------------------------------------------
-# Database helpers
-# ----------------------------------------------------------------------
 def get_db_uri() -> str:
     uri = os.environ.get("DATABASE_URL")
     if not uri:
@@ -154,8 +125,8 @@ def get_db_uri() -> str:
 
 
 def fetch_current_classification(cur, wos_id: str):
-    """Returns (decision, category, ecosystem_service, technology,
-    model_version, prompt_version) or None if the paper / current row isn't found."""
+    """Return (decision, category, ecosystem_service, technology, model_version,
+    prompt_version) for the current row, or None if not found."""
     cur.execute(
         """SELECT c.decision, c.category, c.ecosystem_service,
                   c.technology, c.model_version, c.prompt_version
@@ -170,10 +141,7 @@ def fetch_current_classification(cur, wos_id: str):
 def apply_correction(cur, wos_id: str, new_category: str, new_service: str,
                       decision: str, technology: str, run_id: uuid.UUID,
                       reason: str, reporter_email: str, reviewed_by: str):
-    """Retires the current classification row and inserts a corrected one,
-    then logs a classification_audit row tagged as a human correction
-    (not an LLM call) for traceability, matching the audit pattern used
-    elsewhere in the pipeline."""
+    """Retire the current classification, insert the corrected one, and write an audit row."""
     cur.execute(
         "UPDATE classifications SET is_current = FALSE WHERE wos_id = %s AND is_current = TRUE",
         (wos_id,),
@@ -186,13 +154,8 @@ def apply_correction(cur, wos_id: str, new_category: str, new_service: str,
         (wos_id, str(run_id), MODEL_VERSION_HUMAN, None,
          decision, new_category, new_service, technology),
     )
-    # Audit trail — NOT an LLM call, so model_name/confidence reflect that.
-    # raw_output holds the human-readable reason instead of a model response,
-    # since classification_audit has no separate column for reviewer notes
-    # (see data_dictionary.md Section 4 — reviewer identity/notes normally
-    # live ONLY in the sheet; this is a deliberate, narrow exception so a
-    # correction's justification is still queryable from the DB, not just
-    # buried in a spreadsheet row that could later be deleted).
+    # Not an LLM call: raw_output holds the reviewer's reason (classification_audit
+    # has no column for reviewer notes), so it stays queryable from the DB.
     cur.execute(
         """INSERT INTO classification_audit
                (wos_id, model_name, model_version, prompt_version,
@@ -204,9 +167,6 @@ def apply_correction(cur, wos_id: str, new_category: str, new_service: str,
     )
 
 
-# ----------------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Sync approved feedback-sheet corrections into the DB")
     parser.add_argument("--dry-run", action="store_true",
@@ -310,10 +270,7 @@ def main():
         cur.close()
         conn.close()
 
-        # Batch-write the applied_to_db column back to the sheet. Column
-        # letter is looked up from the header row (see find_column_letter())
-        # rather than hardcoded — confirmed against explorer.py + Julian's
-        # header list that this column is named "applied_to_db".
+        # Write results back to the applied_to_db column.
         applied_to_db_col_letter = find_column_letter(worksheet, "applied_to_db")
         for row_num, value in sheet_updates:
             worksheet.update_acell(f"{applied_to_db_col_letter}{row_num}", value)
