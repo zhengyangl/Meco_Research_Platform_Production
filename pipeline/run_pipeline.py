@@ -1,64 +1,51 @@
 #!/usr/bin/env python
 """
-run_pipeline.py — Master orchestration for the MEco incremental pipeline.
+run_pipeline.py: orchestrate the MEco incremental pipeline.
 
-Confirmed design (Aug 2026, extended Sep 2026): INDEPENDENT, DECOUPLED
-CHAINS, not one linear pipeline — several parts of this system depend on a
-human acting somewhere first (a reviewer finishing a row in a Google Sheet),
-and an orchestrator should never block waiting on that. Each mode below can
-be run on its own schedule, in any order, without the others.
+Each mode is an independent chain that can be run on its own schedule, in any
+order. No chain waits on a human step (e.g. a reviewer finishing a row in a
+Google Sheet).
 
-    Chain A — "new-data"  (triggered by new files on Google Drive)
-        detect new files → classify.py → ingest ONLY auto_ingest rows
-        → text_analysis.py --task all → move processed files on Drive
+    Chain A: new-data  (new files on Google Drive)
+        detect new files -> classify.py -> ingest ONLY auto_ingest rows
+        -> text_analysis.py --task all -> move processed files on Drive
 
-    Chain B — "reviewed"  (periodic, decoupled from file detection)
-        classify.py --pull-reviewed → ingest the completed rows
-        → text_analysis.py --task all
+    Chain B: reviewed  (periodic)
+        classify.py --pull-reviewed -> ingest the completed rows
+        -> text_analysis.py --task all
 
-    "feedback"  (periodic, decoupled from A/B)
-        sync_feedback.py — apply APPROVED corrections from the crowd-sourced
-        Feedback Sheet (explorer.py's "Report a Misclassification" form)
-        into the database. Independent of the classify.py review queue
-        above — a different sheet, a different reviewer action.
+    aggregate  (weekly)
+        aggregate.py
 
-    aggregate.py runs on its OWN weekly schedule — call this script's
-    "aggregate" mode from cron, completely decoupled from everything above.
-    Its output (narrative JSON + Explorer's fallback parquet snapshots)
-    doesn't need to be fresher than that.
+    feedback  (periodic)
+        sync_feedback.py: apply Approved corrections from the crowd-sourced
+        Feedback Sheet (explorer.py's "Report a Misclassification" form) to
+        the database. Separate from the classify.py review queue.
 
-Local WoS metadata archive (confirmed design):
-    Chain A downloads new files, uses them, then moves the ORIGINALS to a
-    "processed/" subfolder on Drive. But Chain B may run days later and
-    still needs the raw metadata (title/abstract/DOI/etc.) for whichever
-    papers went to human review — those rows were never ingested in Chain A
-    (only classified_auto_ingest.csv was). So every file Chain A downloads
-    is ALSO saved permanently to a local archive directory
-    (data/wos_archive/, never deleted). Chain B reads every file in that
-    archive to reconstruct --wos-export metadata for ingest_incremental.py,
-    rather than trying to reverse-lookup which original Drive file a given
-    wos_id came from.
+Local WoS metadata archive:
+    new-data saves every downloaded file to data/wos_archive/ (never deleted)
+    before moving the originals to "processed/" on Drive. Rows sent to human
+    review are not ingested by new-data, so reviewed rebuilds their metadata
+    from every file in the archive for ingest_incremental.py --wos-export.
 
 Usage:
     export DATABASE_URL="postgresql://user:password@host:5432/dbname"
     export OPENROUTER_API_KEY="sk-or-v1-..."
     export GOOGLE_SERVICE_ACCOUNT_FILE="/path/to/service_account.json"
 
-    # Chain A — run after uploading new WoS export(s) to the Drive folder,
-    # or on a schedule that just checks for new files.
+    # After uploading new WoS export(s) to the Drive folder, or on a schedule.
     python run_pipeline.py new-data
 
-    # Chain B — run periodically (e.g. daily) to pick up finished reviews.
+    # Periodic (e.g. daily): pick up finished reviews.
     python run_pipeline.py reviewed
 
-    # Weekly, decoupled from everything else.
+    # Weekly.
     python run_pipeline.py aggregate
 
-    # Periodic — sync Approved corrections from the crowd-sourced Feedback
-    # Sheet (explorer.py's "Report a Misclassification" form).
+    # Periodic: sync Approved corrections from the Feedback Sheet.
     python run_pipeline.py feedback
 
-    # Any mode: preview what would happen without making changes.
+    # Any mode: preview without making changes.
     python run_pipeline.py new-data --dry-run
 """
 
@@ -82,14 +69,10 @@ from googleapiclient.http import MediaIoBaseDownload
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("run_pipeline")
 
-# ────────────────────────────────────────────────────────────────
-# CONFIG
-# ────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-# TEMPORARY Drive folder for new WoS uploads — Julian created this for
-# development. MUST be swapped for the real production folder ID before
-# final deployment; see docs/handover.md.
+# Development Drive folder; replace with the production folder ID before
+# deployment (see docs/handover.md).
 DRIVE_FOLDER_ID = "1D6pNaDPJFiRqlcTpL-lux3tCyWs3HuRU"
 PROCESSED_SUBFOLDER_NAME = "processed"
 
@@ -105,17 +88,13 @@ TEXT_ANALYSIS_SCRIPT = SCRIPT_DIR / "text_analysis.py"
 AGGREGATE_SCRIPT = SCRIPT_DIR / "aggregate.py"
 FEEDBACK_SCRIPT = SCRIPT_DIR / "sync_feedback.py"
 
-# Candidate column names for the WoS unique ID, used only to de-duplicate
-# rows when merging multiple raw exports together before handing off to
-# classify.py / ingest_incremental.py (which do their own, more thorough,
-# column normalization internally).
+# Candidate WoS unique-ID columns, used only to de-duplicate in merge_wos_files.
 _WOS_ID_CANDIDATES = ["UT (Unique WOS ID)", "UT", "Unique WOS ID", "wos_id"]
 
 
-# ────────────────────────────────────────────────────────────────
 # Google Drive helpers
-# ────────────────────────────────────────────────────────────────
 def get_drive_service():
+    """Build a Drive v3 client from the GOOGLE_SERVICE_ACCOUNT_FILE credentials."""
     creds_path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
     if not creds_path:
         raise EnvironmentError(
@@ -164,6 +143,7 @@ def ensure_processed_subfolder(service, parent_folder_id: str) -> str:
 
 
 def download_file(service, file_id: str, file_name: str, dest_dir: Path) -> Path:
+    """Download a Drive file into dest_dir and return the local path."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_path = dest_dir / file_name
     request = service.files().get_media(fileId=file_id)
@@ -177,6 +157,7 @@ def download_file(service, file_id: str, file_name: str, dest_dir: Path) -> Path
 
 
 def move_file_to_processed(service, file_id: str, current_parent_id: str, processed_folder_id: str):
+    """Move a Drive file from its current parent folder to the processed folder."""
     service.files().update(
         fileId=file_id,
         addParents=processed_folder_id,
@@ -185,12 +166,9 @@ def move_file_to_processed(service, file_id: str, current_parent_id: str, proces
     ).execute()
 
 
-# ────────────────────────────────────────────────────────────────
-# Local archive + file merging
-# ────────────────────────────────────────────────────────────────
+# Local archive and file merging
 def archive_file(local_path: Path) -> Path:
-    """Permanent copy — never deleted, never overwritten (timestamp-prefixed
-    to avoid collisions if the same filename is uploaded twice)."""
+    """Copy a file into ARCHIVE_DIR under a UTC-timestamp-prefixed name."""
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     archived_path = ARCHIVE_DIR / f"{stamp}_{local_path.name}"
@@ -208,13 +186,7 @@ def _read_wos_file(path: Path) -> pd.DataFrame:
 
 
 def merge_wos_files(paths: list, output_path: Path) -> Path:
-    """
-    Concatenate multiple raw WoS exports into one file. Only de-duplicates
-    if a recognizable ID column is found — classify.py and
-    ingest_incremental.py both do their own (more careful) de-duplication
-    downstream regardless, so this is just a courtesy to avoid double-
-    billing the OpenRouter API for an obviously-duplicate row.
-    """
+    """Concatenate WoS exports into one .xlsx, de-duplicated on the WoS ID column."""
     frames = [_read_wos_file(Path(p)) for p in paths]
     combined = pd.concat(frames, ignore_index=True)
 
@@ -236,10 +208,9 @@ def merge_wos_files(paths: list, output_path: Path) -> Path:
     return output_path
 
 
-# ────────────────────────────────────────────────────────────────
-# Subprocess + logging helpers
-# ────────────────────────────────────────────────────────────────
+# Subprocess and logging helpers
 def run_step(cmd: list, dry_run: bool, description: str):
+    """Run cmd in SCRIPT_DIR (log only if dry_run); raise RuntimeError on non-zero exit."""
     logger.info(f"$ {' '.join(str(c) for c in cmd)}")
     if dry_run:
         logger.info(f"[DRY RUN] Not executing: {description}")
@@ -261,10 +232,7 @@ def get_db_uri() -> str:
 
 def log_orchestrator_run(mode: str, papers_processed: int, run_id: uuid.UUID,
                           start_time: datetime, end_time: datetime, dry_run: bool):
-    """One summary row per run_pipeline.py invocation, in the same
-    pipeline_runs table classify.py/ingest_incremental.py write their own
-    per-script rows to. model_version='orchestrator' distinguishes these
-    from actual classification runs."""
+    """Insert one pipeline_runs row (model_version='orchestrator'); failures only warn."""
     if dry_run:
         logger.info(f"[DRY RUN] Would log pipeline_runs row: mode={mode}, papers={papers_processed}")
         return
@@ -286,10 +254,9 @@ def log_orchestrator_run(mode: str, papers_processed: int, run_id: uuid.UUID,
         logger.warning(f"Could not log orchestrator run to pipeline_runs: {e}")
 
 
-# ────────────────────────────────────────────────────────────────
-# Chain A — new-data
-# ────────────────────────────────────────────────────────────────
+# Chains
 def chain_new_data(dry_run: bool):
+    """Classify and ingest new Drive files, run text analysis, move files to processed/."""
     run_id = uuid.uuid4()
     start_time = datetime.now(timezone.utc)
 
@@ -308,25 +275,22 @@ def chain_new_data(dry_run: bool):
                               datetime.now(timezone.utc), dry_run=True)
         return
 
-    # Download + permanently archive every file
     local_paths = []
     for f in new_files:
         local_path = download_file(service, f["id"], f["name"], WORKDIR / "downloads")
         archive_file(local_path)
         local_paths.append(local_path)
 
-    # Merge into a single batch for this run
     combined_path = merge_wos_files(local_paths, WORKDIR / "combined_new_batch.xlsx")
     combined_df = _read_wos_file(combined_path)
 
-    # classify.py — new papers only
     run_step(
         [sys.executable, str(CLASSIFY_SCRIPT), "--input", str(combined_path),
          "--output-dir", str(CLASSIFY_OUTPUT_DIR)],
         dry_run, "classify.py",
     )
 
-    # ingest ONLY the auto_ingest batch — needs_review rows wait for Chain B
+    # needs_review rows are ingested later by the "reviewed" chain.
     auto_ingest_path = CLASSIFY_OUTPUT_DIR / "classified_auto_ingest.csv"
     dataset_version = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     run_step(
@@ -337,13 +301,11 @@ def chain_new_data(dry_run: bool):
         dry_run, "ingest_incremental.py (auto-ingest)",
     )
 
-    # NLP features — full recompute, cheap enough at current corpus size
     run_step(
         [sys.executable, str(TEXT_ANALYSIS_SCRIPT), "--task", "all"],
         dry_run, "text_analysis.py --task all",
     )
 
-    # Mark Drive files as processed
     processed_folder_id = ensure_processed_subfolder(service, DRIVE_FOLDER_ID)
     for f in new_files:
         move_file_to_processed(service, f["id"], DRIVE_FOLDER_ID, processed_folder_id)
@@ -354,10 +316,8 @@ def chain_new_data(dry_run: bool):
     logger.info(f"Chain A complete in {(end_time - start_time).total_seconds():.1f}s")
 
 
-# ────────────────────────────────────────────────────────────────
-# Chain B — reviewed
-# ────────────────────────────────────────────────────────────────
 def chain_reviewed(dry_run: bool):
+    """Pull completed reviews, ingest them using archived WoS metadata, run text analysis."""
     run_id = uuid.uuid4()
     start_time = datetime.now(timezone.utc)
 
@@ -411,10 +371,8 @@ def chain_reviewed(dry_run: bool):
                 f"({n_reviewed} reviewed row(s) ingested)")
 
 
-# ────────────────────────────────────────────────────────────────
-# aggregate — weekly, decoupled
-# ────────────────────────────────────────────────────────────────
 def chain_aggregate(dry_run: bool):
+    """Run aggregate.py."""
     run_id = uuid.uuid4()
     start_time = datetime.now(timezone.utc)
 
@@ -426,13 +384,8 @@ def chain_aggregate(dry_run: bool):
         logger.info(f"aggregate.py complete in {(end_time - start_time).total_seconds():.1f}s")
 
 
-# ────────────────────────────────────────────────────────────────
-# feedback — syncs Approved rows from the crowd-sourced misclassification
-# Feedback Sheet into the DB. Decoupled from Chain A/B and aggregate, same
-# spirit as "reviewed" — a human has to act in the sheet first (mark a row
-# Approved), and this step picks that up whenever it's next run.
-# ────────────────────────────────────────────────────────────────
 def chain_feedback(dry_run: bool):
+    """Run sync_feedback.py to apply Approved feedback corrections."""
     run_id = uuid.uuid4()
     start_time = datetime.now(timezone.utc)
 
@@ -447,9 +400,6 @@ def chain_feedback(dry_run: bool):
         logger.info(f"sync_feedback.py complete in {(end_time - start_time).total_seconds():.1f}s")
 
 
-# ────────────────────────────────────────────────────────────────
-# Main
-# ────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="MEco master pipeline orchestrator")
     parser.add_argument(
