@@ -20,7 +20,7 @@ Behaviour:
   - Run by `python run_pipeline.py feedback`.
 
 Usage:
-    export DATABASE_URL="postgresql://pipeline_user:***@127.0.0.1:5432/me_dashboard"
+    export DATABASE_URL="postgresql://pipeline_user:<password>@127.0.0.1:5432/me_dashboard"
     export GOOGLE_SERVICE_ACCOUNT_FILE="/path/to/service_account.json"
     export FEEDBACK_SHEET_ID="..."   # optional, falls back to the default below
 
