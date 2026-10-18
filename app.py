@@ -1,15 +1,15 @@
-"""
-MEco Research Dashboard — Complete Single-Page Application
-"Nature Is Not Optional."
-Based on Jacobs et al. (2025), Biomimetics 2025, 10, 784
+"""Narrative landing page of the MEco dashboard ("Nature Is Not Optional").
+
+Single-page Streamlit app presenting the results of Jacobs et al. (2025),
+Biomimetics 2025, 10, 784 as a scrolling story in sections 0-5: an interactive
+everyday-actions prompt, corpus overview, service coverage gaps, discipline
+network, scenario Sankey with open-access map, and closing section. Data is read
+from the pre-computed files in dashboard_data/.
 
 Run with:
     streamlit run app.py
 """
 
-# ════════════════════════════════════════════════════════════════
-# IMPORTS
-# ════════════════════════════════════════════════════════════════
 import streamlit as st
 import streamlit.components.v1 as components
 import plotly.graph_objects as go
@@ -18,9 +18,6 @@ import numpy as np
 import pandas as pd
 import json
 
-# ════════════════════════════════════════════════════════════════
-# PAGE CONFIG
-# ════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Nature Is Not Optional · MEco",
     page_icon="🌿",
@@ -28,9 +25,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ════════════════════════════════════════════════════════════════
-# GLOBAL CSS 
-# ════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
@@ -377,13 +371,8 @@ div[data-testid="stDownloadButton"] button:hover {
 """, unsafe_allow_html=True)
 
 
-# ════════════════════════════════════════════════════════════════
-# DATA LOADING — read pre-computed JSON/Parquet from dashboard_data/
-# ════════════════════════════════════════════════════════════════
-# These files are produced by pipeline/aggregate.py on every pipeline run.
-# The narrative page never queries the database directly — it reads only
-# these static artifacts. This is what keeps the page loading instantly
-# and what lets it survive even if the database is offline.
+# Data loading: static files in dashboard_data/ written by pipeline/aggregate.py.
+# The page never queries the database; the loaders are cached.
 import json as _json
 from pathlib import Path as _Path
 _DATA_DIR = _Path(__file__).parent / "dashboard_data"
@@ -420,37 +409,31 @@ def _load_framing():
         return _json.load(f)
         
         
-CORPUS = _load_corpus_meta()       # corpus_meta.json contents
-SVC_SUMMARY = _load_services_summary()  # services_summary.json contents
-ANNUAL = _load_annual_by_category()     # annual_by_category.json contents
-COUNTRY_OA = _load_country_oa()         # country_oa.json contents
-WOS_NET = _load_wos_cooccurrence()      # wos_cooccurrence.json contents
-FRAMING = _load_framing()               # framing.json contents
+CORPUS = _load_corpus_meta()
+SVC_SUMMARY = _load_services_summary()
+ANNUAL = _load_annual_by_category()
+COUNTRY_OA = _load_country_oa()
+WOS_NET = _load_wos_cooccurrence()
+FRAMING = _load_framing()
 
-# ── Service display-name mapping ────────────────────────────────────
-# Database / aggregate.py stores the raw GPT classification values
-# (e.g. 'Fibre/Hide/Wood', 'Atmospheric Regulation') as the source of truth.
-# This dict turns those into the prettier display labels used throughout
-# the narrative page. Anything not in this dict falls through to the raw
-# value, so it's safe to leave the lookup unconditional.
+# Raw service names (as stored in the data files) -> display labels.
+# Names without an entry are used unchanged.
 SERVICE_DISPLAY_NAMES = {
     "Fibre/Hide/Wood":         "Fibre · Hide · Wood",
     "Atmospheric Regulation":  "Atmospheric Reg.",
     "Inspiration/Education":   "Inspiration · Education",
 }
 def display_name(raw: str) -> str:
+    """Return the display label for a raw service name (unmapped names unchanged)."""
     return SERVICE_DISPLAY_NAMES.get(raw, raw)
 
-# Reverse mapping: pretty label → raw DB name (for deep-link URLs).
+# Inverse of SERVICE_DISPLAY_NAMES.
 SERVICE_RAW_NAMES = {v: k for k, v in SERVICE_DISPLAY_NAMES.items()}
 def raw_name(pretty: str) -> str:
     return SERVICE_RAW_NAMES.get(pretty, pretty)
 
 
-# ════════════════════════════════════════════════════════════════
-# SHARED CONSTANTS
-# ════════════════════════════════════════════════════════════════
-RESEARCH_GAP_THRESHOLD = 500  # papers; services below this are flagged
+RESEARCH_GAP_THRESHOLD = 500  # papers; services below this count as research gaps
 
 _SERVICE_META = {
     "Biochemicals":            {"icon": "", "desc": "Molecules used in medicine"},
@@ -477,8 +460,6 @@ _SERVICE_META = {
     "Cultural Identity":       {"icon": "", "desc": "Individual and societal identity from human-nature bonds"},
 }
 
-# Build the same nested-dict structure the rest of the code expects, but now
-# every paper count comes from services_summary.json — no hardcoded values.
 _CAT_CSS_MAP = {"Provisioning": "provisioning", "Cultural": "cultural",
                 "Regulating": "regulating", "Supporting": "supporting"}
 SERVICES = {cat: {"css": _CAT_CSS_MAP[cat], "items": []} for cat in _CAT_CSS_MAP}
@@ -486,15 +467,12 @@ for _s in SVC_SUMMARY["services"]:
     _raw = _s["service"]
     _meta = _SERVICE_META.get(_raw, {"icon": "•", "desc": ""})
     SERVICES[_s["category"]]["items"].append({
-        "name":   display_name(_raw),   # pretty label used everywhere downstream
+        "name":   display_name(_raw),
         "icon":   _meta["icon"],
         "desc":   _meta["desc"],
         "papers": _s["total"],
     })
 
-# Build _df2 directly from services_summary.json — single source of truth.
-# The display_name() pass keeps the pretty service labels everywhere in the
-# narrative; raw GPT names stay in the database and the data files.
 _df2 = pd.DataFrame([
     {"service":  display_name(s["service"]),
      "category": s["category"],
@@ -506,9 +484,7 @@ _df2 = pd.DataFrame([
 ])
 _df2["adj"] = _df2["total"].clip(lower=1)
 
-# ════════════════════════════════════════════════════════════════
-# SESSION STATE
-# ════════════════════════════════════════════════════════════════
+# Session state
 _svc_names = [s["name"] for cat in SERVICES.values() for s in cat["items"]]
 for _name in _svc_names:
     if _name not in st.session_state:
@@ -521,9 +497,7 @@ if "spotlight_idx" not in st.session_state:
     st.session_state.spotlight_idx = 0
 
 
-# ════════════════════════════════════════════════════════════════
-# ONE-TIME OPENING ANIMATION 
-# ════════════════════════════════════════════════════════════════
+# One-time opening animation
 if not st.session_state.get("intro_played", False):
     st.session_state.intro_played = True
     
@@ -674,13 +648,12 @@ if not st.session_state.get("intro_played", False):
     """, height=0)
 
 
-# ════════════════════════════════════════════════════════════════
-# HELPER FUNCTIONS
-# ════════════════════════════════════════════════════════════════
+# Helpers
 def section_sep():
     st.markdown('<div class="section-sep"></div>', unsafe_allow_html=True)
 
 def credibility_badge(has_real: bool = True, has_sim: bool = False):
+    """Render the "real data" and/or "simulated" badge row above a chart."""
     badges = ""
     if has_real:
         badges += ('<span class="badge badge-real"><span class="badge-dot"></span>'
@@ -691,7 +664,7 @@ def credibility_badge(has_real: bool = True, has_sim: bool = False):
     st.markdown(f'<div class="badge-row">{badges}</div>', unsafe_allow_html=True)
 
 def build_sankey(groups, label_r, label_e, label_s):
-    """Build a 3 to 6 Sankey from paradigm sources to target-group sinks.
+    """Build a Sankey from the Replace/Enhance/Support sources to one sink per group.
 
     Args:
         groups: list of dicts with keys {'key', 'label', 'replace', 'enhance',
@@ -711,23 +684,22 @@ def build_sankey(groups, label_r, label_e, label_s):
     target_colors = []
     for g in groups:
         if g["key"] == "critical":
-            target_colors.append("rgba(61,122,82,0.90)")   # highlighted green
+            target_colors.append("rgba(61,122,82,0.90)")
         elif g["key"] == "other":
-            target_colors.append("rgba(184,176,164,0.75)") # muted
+            target_colors.append("rgba(184,176,164,0.75)")
         else:
-            target_colors.append("rgba(138,132,123,0.80)") # neutral gray
+            target_colors.append("rgba(138,132,123,0.80)")
     node_colors = source_colors + target_colors
 
-# Precompute paradigm totals for percentage math in hover tooltips.
+    # Per-paradigm totals, the denominators for the hover percentages.
     source_totals = [
-        sum(g["replace"] for g in groups),   # 0: Replace total
-        sum(g["enhance"] for g in groups),   # 1: Enhance total
-        sum(g["support"] for g in groups),   # 2: Support total
+        sum(g["replace"] for g in groups),
+        sum(g["enhance"] for g in groups),
+        sum(g["support"] for g in groups),
     ]
 
-    # Flows: for each group, add one link from each paradigm source.
-    # Skip zero-value flows to keep the layout clean. Also record customdata
-    # per link — [pct_of_target, pct_of_source] — for hover percentages.
+    # One link per (group, paradigm); zero-value flows are skipped.
+    # Link customdata is [paradigm_name, pct_of_paradigm_total] for the hover text.
     source, target, value, link_colors, link_customdata = [], [], [], [], []
     for i, g in enumerate(groups):
         target_idx = 3 + i
@@ -743,7 +715,7 @@ def build_sankey(groups, label_r, label_e, label_s):
             source.append(src_idx); target.append(target_idx); value.append(v)
             pct_s = v / source_totals[src_idx] * 100 if source_totals[src_idx] else 0
             link_customdata.append([paradigm_name, pct_s])
-            # Highlight the Support → Critical link — the narrative's punchline.
+            # Support -> critical link is drawn stronger than the others.
             if g["key"] == "critical" and src_idx == 2:
                 link_colors.append("rgba(61,122,82,0.55)")
             elif g["key"] == "critical":
@@ -751,8 +723,7 @@ def build_sankey(groups, label_r, label_e, label_s):
             else:
                 link_colors.append(f"rgba({base_rgb},0.22)")
 
-    # Node customdata: pre-formatted breakdown strings for hover.
-    # Source nodes → simple total. Target nodes → full R/E/S breakdown.
+    # Hover text per node: totals for sources, R/E/S breakdown for targets.
     node_customdata = []
     for src_idx in range(3):
         node_customdata.append(f"{source_totals[src_idx]:,} papers total")
@@ -771,7 +742,7 @@ def build_sankey(groups, label_r, label_e, label_s):
         else:
             node_customdata.append("(empty)")
 
-    # Manual node positioning — force sources to spread evenly on the left
+    # Fixed node positions: sources on the left, groups on the right.
     _node_x = [0.001, 0.001, 0.001] + [0.999] * n_groups
     _node_y = [0.18, 0.7, 0.95] + [
         (i + 0.5) / n_groups for i in range(n_groups)
@@ -804,18 +775,13 @@ def build_sankey(groups, label_r, label_e, label_s):
 
 
 def _s4_target_groups():
-    """Build the 6-target groups for Sankey chart.
-    Structure:
-        - Top 4 services by total paper count (excluding critical food-system services)
-        - Critical Services   (Pollination + Soil Formation + Nutrient Cycling)
-        - Other Services      (everything else)
+    """Return Sankey groups: top 4 non-critical services, then 'critical' and 'other'.
 
-    Returns a list of dicts:
-        {'key', 'label', 'replace', 'enhance', 'support', 'total'}
+    Each group is a dict with keys key, label, replace, enhance, support, total.
     """
     CRITICAL = {"Pollination", "Soil Formation", "Nutrient Cycling"}
 
-    # Rank services by total, excluding critical from the top-4 pool
+    # Critical services are excluded from the top-4 ranking.
     ranked = sorted(
         [s for s in SVC_SUMMARY["services"] if s["service"] not in CRITICAL],
         key=lambda s: s["total"],
@@ -835,7 +801,6 @@ def _s4_target_groups():
             "total":   int(s["total"]),
         })
 
-    # Critical group — sum of the three food-system services
     crit = {"replace": 0, "enhance": 0, "support": 0, "total": 0}
     for s in SVC_SUMMARY["services"]:
         if s["service"] in CRITICAL:
@@ -847,7 +812,6 @@ def _s4_target_groups():
         **crit,
     })
 
-    # Other group — everything not in top-4 and not critical
     other = {"replace": 0, "enhance": 0, "support": 0, "total": 0}
     for s in SVC_SUMMARY["services"]:
         if s["service"] not in top4_names and s["service"] not in CRITICAL:
@@ -863,11 +827,9 @@ def _s4_target_groups():
 
 
 def _s4_scenario_groups(real_groups, tgt_r_pct, tgt_e_pct, tgt_s_pct):
-    """Recompute each group's R/E/S under a hypothetical global paradigm mix.
+    """Rescale each group's R/E/S counts to a target paradigm mix (fractions of total).
 
-    Total corpus stays the same. Each paradigm's global total is set to
-    (target_pct × total). Each group keeps its relative share within each
-    paradigm — so the target rankings don't change, only the paradigm mix.
+    Each group keeps its share within each paradigm; only the paradigm mix changes.
     """
     real_r = sum(g["replace"] for g in real_groups)
     real_e = sum(g["enhance"] for g in real_groups)
@@ -896,11 +858,8 @@ def _s4_scenario_groups(real_groups, tgt_r_pct, tgt_e_pct, tgt_s_pct):
     return scenario
 
 
-# ════════════════════════════════════════════════════════════════
-# SECTION 0 · Feel 
-# ════════════════════════════════════════════════════════════════
+# Section 0: Feel
 
-# Hero-nav + opening-animation CSS.
 st.markdown("""
 <style>
 /* ── Hero navigation ──────────────────────────────────────── */
@@ -986,7 +945,7 @@ st.markdown("""
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 st.markdown('<div id="sec-feel" class="sec-anchor"></div>', unsafe_allow_html=True)
 
-# ── Everyday actions → the ecosystem services they quietly invoke ──
+# Everyday action -> raw names of the ecosystem services it relies on.
 _EVERYDAY_ACTIONS = {
     "Drank coffee or tea":                 ["Potable Water", "Pollination", "Soil Formation", "Nutrient Cycling"],
     "Ate a meal with fresh produce":       ["Food", "Pollination", "Primary Production", "Biodiversity"],
@@ -1001,7 +960,6 @@ _EVERYDAY_ACTIONS = {
     "Saw a bird, insect, or wild animal":  ["Biodiversity", "Pollination", "Coastline Regulation"],
 }
 
-# Native pills 
 selected_actions = st.pills(
     "Everyday actions",
     options=list(_EVERYDAY_ACTIONS.keys()),
@@ -1011,14 +969,12 @@ selected_actions = st.pills(
 
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 
-# 1. Raw Names
 triggered_raw_names = set()
 for action in selected_actions:
     triggered_raw_names.update(_EVERYDAY_ACTIONS[action])
 
-# 2. Sync triggered services into session_state.
-# Keys use display names because downstream UI components reference s["name"].
-# Matching remains based on RAW ecosystem service identifiers.
+# Session keys are display names (downstream components read s["name"]);
+# matching uses raw names.
 for s_cat in SERVICES.values():
     for s_item in s_cat["items"]:
         raw_val = raw_name(s_item["name"])
@@ -1037,7 +993,6 @@ selected_services = [
 num_actions = len(selected_actions)
 num_services = len(selected_services)
 
-# ── Live counter ──────────────────────────────────────────────
 st.markdown(f"""
 <div class="ctr">
     <div class="ctr-n">{num_services}</div>
@@ -1048,7 +1003,6 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Personalised insight panel ───────────────────────────────
 if num_services == 0:
     st.markdown("""
     <div class="insight-empty">
@@ -1133,10 +1087,7 @@ else:
     final_html = "".join([p for p in html_payload if p != ""])
     st.markdown(final_html, unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════════════════
-# SECTION 1 · Discovery 
-# ════════════════════════════════════════════════════════════════
-# section_sep()
+# Section 1: Discovery
 st.markdown('<div id="sec-discovery" class="sec-anchor"></div>', unsafe_allow_html=True)
 st.markdown('<div class="s1-eyebrow">Section 01 · Discovery</div>', unsafe_allow_html=True)
 st.markdown(f'<h2 class="s1-title">{CORPUS["total_papers"]:,} Attempts.</h2>', unsafe_allow_html=True)
@@ -1153,7 +1104,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 
-# Build percentages live from the real paradigm totals.
 _pt = SVC_SUMMARY["paradigm_totals"]
 _pt_total = _pt["replace"] + _pt["enhance"] + _pt["support"]
 _pct_replace = round(_pt["replace"] / _pt_total * 100) if _pt_total else 0
@@ -1200,13 +1150,11 @@ st.markdown('<div class="chart-label">Biomimetic design paradigms · 2004 – 20
             unsafe_allow_html=True)
 credibility_badge(has_real=True, has_sim=False)
 
-# Real annual data from annual_by_category.json
 _years        = ANNUAL["years"]
 _replace_data = ANNUAL["replace"]
 _enhance_data = ANNUAL["enhance"]
 _support_data = ANNUAL["support"]
 
-# Compute paradigm percentages for legend labels
 _total_all = sum(_replace_data) + sum(_enhance_data) + sum(_support_data)
 _pct_r = round(sum(_replace_data) / _total_all * 100) if _total_all else 0
 _pct_e = round(sum(_enhance_data) / _total_all * 100) if _total_all else 0
@@ -1227,7 +1175,6 @@ _area_fig.add_annotation(x=2013.25, y=0.97, yref="paper",
     text='Fitter (2013):<br>"Can ES be replaced?"',
     font=dict(size=9, color="#6B665E", family="Inter, sans-serif"),
     showarrow=False, xanchor="left", yanchor="top")
-# Support annotation: anchor to the latest year with data
 _support_anno_year = _years[-2] if len(_years) >= 2 else _years[-1]
 _support_anno_val  = _support_data[_years.index(_support_anno_year)]
 
@@ -1288,10 +1235,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ════════════════════════════════════════════════════════════════
-# SECTION 2 · The Gap Map  
-# ════════════════════════════════════════════════════════════════
-# section_sep()
+# Section 2: The Gap Map
 st.markdown('<div id="sec-gap" class="sec-anchor"></div>', unsafe_allow_html=True)
 st.markdown('<div class="s2-eyebrow">Section 02 · The Gap Map</div>', unsafe_allow_html=True)
 st.markdown('<h2 class="s2-title">The Services Nobody Is Building.</h2>', unsafe_allow_html=True)
@@ -1306,23 +1250,23 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 
-# ── Ecosystem service coverage — horizontal stacked bars ─────────
+# Stacked horizontal bars: one row per service, plus a header row per category.
 
 _CAT_ORDER2 = ["Provisioning", "Regulating", "Supporting", "Cultural"]
 _R_COL2 = {
-    "support": "rgba(46,124,184,0.90)",   # blue
-    "enhance": "rgba(29,140,105,0.85)",   # green
-    "replace": "rgba(168,116,14,0.88)",   # amber
+    "support": "rgba(46,124,184,0.90)",
+    "enhance": "rgba(29,140,105,0.85)",
+    "replace": "rgba(168,116,14,0.88)",
 }
 _CRITICAL_SERVICES = {"Pollination", "Soil Formation", "Nutrient Cycling"}
 
-# Sort: group by category (family), then largest→smallest within each group.
+# Category order, then descending total within each category.
 _ord2 = pd.concat(
     [_df2[_df2["category"] == _c].sort_values("total", ascending=False)
      for _c in _CAT_ORDER2]
 ).reset_index(drop=True)
 
-# Build tick labels + stacked values. 
+# Header rows carry zero values and a total of -1 (no total label).
 _labels = []
 _replace_vals, _enhance_vals, _support_vals = [], [], []
 _totals = []
@@ -1338,7 +1282,7 @@ for _, _r in _ord2.iterrows():
         _totals.append(-1)  
     _svc = _r["service"]
     if _svc in _CRITICAL_SERVICES:
-        # critical food-system services — warm red highlight
+        # Critical services are labelled in red.
         _label_html = f"<span style='color:#B34C2F'>{_svc}</span>"
     else:
         _label_html = _svc
@@ -1349,7 +1293,6 @@ for _, _r in _ord2.iterrows():
     _totals.append(int(_r["total"]))
     _prev_cat = _r["category"]
 
-# ── Build the figure ────────────────────────────────────────────
 _row_h = 24
 _fig_h = len(_labels) * _row_h + 70
 
@@ -1369,7 +1312,7 @@ _bar_fig.add_trace(go.Bar(
     marker=dict(color=_R_COL2["support"], line=dict(color="#FFFFFF", width=0.5)),
     hovertemplate="Support: <b>%{x:,}</b><extra></extra>"))
 
-# Total-count annotation at bar end (skip header + zero rows)
+# Total label at the end of each bar (header and zero-total rows skipped).
 for _i, _t in enumerate(_totals):
     if _t > 0:
         _bar_fig.add_annotation(
@@ -1398,7 +1341,6 @@ _bar_fig.update_layout(
         tickmode='array',
         tickvals=_yidx, ticktext=_labels,
         tickfont=dict(size=11, color="#4A453E", family="Inter, sans-serif"),
-        # autorange='reversed', 
         range=[len(_labels) - 0.5, -0.5],
         showline=False, ticks=""),
     hoverlabel=dict(
@@ -1406,15 +1348,15 @@ _bar_fig.update_layout(
         font=dict(size=11, color="#2A2722", family="Inter, sans-serif")),
 )
 
-# ── Family background bands ─────────────────────────────────────
+# Background band per category.
 _family_tints = {
-    "Provisioning": "rgba(168,116,14,0.1)",   # amber wash
-    "Regulating":   "rgba(46,124,184,0.1)",   # blue wash
-    "Supporting":   "rgba(29,140,105,0.1)",   # green wash
-    "Cultural":     "rgba(120,120,120,0.1)",  # grey wash
+    "Provisioning": "rgba(168,116,14,0.1)",
+    "Regulating":   "rgba(46,124,184,0.1)",
+    "Supporting":   "rgba(29,140,105,0.1)",
+    "Cultural":     "rgba(120,120,120,0.1)",
 }
 
-# Walk _labels to find each family's start/end row index. 
+# Row range of each category, located via its header row.
 _family_ranges = []   
 _cur_family = None
 _cur_start = None
@@ -1422,7 +1364,6 @@ for _i, _lbl in enumerate(_labels):
     if "<b><span" in _lbl:  # this is a family-header row
         if _cur_family is not None:
             _family_ranges.append((_cur_family, _cur_start, _i - 1))
-        # pull family name out of the header text
         for _fam in _family_tints:
             if _fam in _lbl:
                 _cur_family = _fam
@@ -1442,7 +1383,7 @@ for _fam, _s, _e in _family_ranges:
         layer="below",
     )
 
-# ── Key insight — placed in the empty lower-right of the chart ────
+# Key-insight callout in the empty lower-right area (x, y in data units).
 _bar_fig.add_annotation(
     xref="x", yref="y",
     x=10100,                       
@@ -1467,7 +1408,7 @@ _bar_fig.add_annotation(
     font=dict(family="Inter, sans-serif"),
 )
 
-# Subtle left accent bar for the insight — a single line, warm tone.
+# Accent line beside the callout.
 _bar_fig.add_shape(
     type="line",
     xref="x", yref="y",
@@ -1477,7 +1418,6 @@ _bar_fig.add_shape(
     line=dict(color="#B34C2F", width=2),
 )
 
-# ── Display ─────────────────────────────────────────────────────
 st.markdown(
     '<div class="chart-label">Half the corpus goes to just three ecosystem services</div>',
     unsafe_allow_html=True)
@@ -1541,7 +1481,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Bar chart relocated to the Data Explorer.
 st.markdown("""
 <p style="font:300 .74rem/1.7 'Inter',sans-serif;color:#9A938A;margin-top:.4rem;padding-left:2px;">
     Want the exact numbers for all 22 services, sorted and filterable?
@@ -1553,9 +1492,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ════════════════════════════════════════════════════════════════
-# SECTION 2.5 · Nature's Voice 
-# ════════════════════════════════════════════════════════════════
+# Section 2.5: Nature's Voice
 
 _voice_cutscene_html = """
 <script>
@@ -1749,10 +1686,7 @@ _voice_cutscene_html = """
 """
 components.html(_voice_cutscene_html, height=0)
 
-# ═════════════════════════════════
-# SECTION 3 · Islands of Expertise 
-# ════════════════════════════════
-# section_sep()
+# Section 3: Islands of Expertise
 st.markdown('<div id="sec-islands" class="sec-anchor"></div>', unsafe_allow_html=True)
 st.markdown('<div class="s3-eyebrow">Section 03 · Islands of Expertise</div>', unsafe_allow_html=True)
 st.markdown('<h2 class="s3-title">Bio-inspired &ne; Ecosystem-informed.</h2>', unsafe_allow_html=True)
@@ -1776,36 +1710,29 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 
-# ── discipline network — real data from wos_cooccurrence.json ────
-# The number of visible nodes is adjustable; the network re-lays out
-# deterministically for each value. 
-# All positions are stable within a given _S3_TOP_N — no random
-# seeds, no run-to-run drift.
+# Discipline network from wos_cooccurrence.json; layout is deterministic
+# for a given _S3_TOP_N.
 _S3_TOP_N     = 12
 _S3_PAR_COLOR = {"Replace": "rgba(168,116,14,0.90)",
                  "Enhance": "rgba(29,140,105,0.85)",
                  "Support": "rgba(46,124,184,0.88)"}
 _S3_PAR_BORDER = {"Replace": "#A8740E", "Enhance": "#1D8C69", "Support": "#2E7CB8"}
 
-# Filter to top-N nodes, then filter edges to those endpoints
+# Keep the top-N nodes and only the edges between them.
 _s3_nodes = WOS_NET["nodes"][:_S3_TOP_N]
 _s3_node_names = {n["raw_name"] for n in _s3_nodes}
 _s3_edges = [e for e in WOS_NET["edges"]
              if e["a"] in _s3_node_names and e["b"] in _s3_node_names]
 
-# Cluster centres (hand-anchored — this is the "written down" part of the
-# hybrid layout: clusters are placed by editorial decision; nodes within a
-# cluster are placed by a deterministic circular arrangement).
+# Cluster centres are fixed by hand; nodes within a cluster sit on a ring.
 _S3_CLUSTER_CENTRES = {
     "Hard-Sci":    (-0.9,  0.15),
     "Bio-Applied": ( 1.0,  0.15),
     "Applied-Eng": ( 0.00, -1.0),
 }
 
-# ── Deterministic circular layout within each cluster ───────────────
-# Nodes in each cluster are sorted by paper count (largest first), then
-# placed evenly on a circle around the cluster centre. Same _S3_TOP_N →
-# same layout, every render, on every host.
+# Members sorted by paper count (largest first), spaced evenly on a ring
+# around the cluster centre.
 import math as _math3
 _s3_by_cluster = {}
 for _n in _s3_nodes:
@@ -1827,12 +1754,11 @@ for _cluster, _members in _s3_by_cluster.items():
             _s3_pos[_m["raw_name"]] = (_cx + _r_ring * _math3.cos(_angle),
                                         _cy + _r_ring * _math3.sin(_angle))
 
-# ── Header + credibility + read-the-chart caption ─────────────────
 st.markdown(
     f'<div class="chart-label">Top {len(_s3_nodes)} disciplines by publication volume &middot; biomimetics corpus</div>',
     unsafe_allow_html=True)
 credibility_badge(has_real=True, has_sim=False)
-# Build the paradigm-legend string from actually-present paradigms in top-N.
+# Legend lists only the paradigms present among the top-N nodes.
 _s3_present_paradigms = {n["dominant_paradigm"] for n in _s3_nodes}
 _s3_par_legend_bits = []
 if "Replace" in _s3_present_paradigms:
@@ -1850,10 +1776,9 @@ st.markdown(f"""
 </p>
 """, unsafe_allow_html=True)
 
-# ── Figure ──────────────────────────────────────────────────────
 _net3 = go.Figure()
 
-# Cluster background zones — light tinted circles behind each family
+# Tinted background zone per cluster
 _S3_CLUSTER_STYLE = {
     "Hard-Sci":    {"fill": "rgba(168,116,14,0.05)", "border": "rgba(168,116,14,0.18)",
                     "label": "HARD-SCI · materials, chemistry, physics", "label_color": "rgba(168,116,14,0.70)"},
@@ -1878,7 +1803,7 @@ for _cluster, _members in _s3_by_cluster.items():
                                     family="Inter, sans-serif"),
                          showarrow=False)
 
-# The absent-discipline annotation — this is what §3 is really about
+# Annotation naming the disciplines absent from the network
 _net3.add_annotation(
     x=0, y=0.75, xref="x", yref="y",
     text="<i>Ecology · Conservation Biology · Environmental Science</i><br>"
@@ -1887,8 +1812,8 @@ _net3.add_annotation(
               family="Inter, sans-serif"),
     align="center", showarrow=False)
 
-# Edge traces
-# Solid for intra-cluster, dashed for cross-cluster. Both weight-scaled.
+# Edges: cross-cluster dashed with a fixed style; intra-cluster solid, scaled
+# by co-occurrence weight.
 _max_cooccur = max((e["cooccur"] for e in _s3_edges), default=1)
 for _e in _s3_edges:
     _x0, _y0 = _s3_pos[_e["a"]]
@@ -1920,7 +1845,7 @@ for _par3 in ["Replace", "Enhance", "Support"]:
         _nx.append(_x); _ny.append(_y)
         _nsz.append(_s3_node_size(_node["n_papers"]))
         _nlbl.append(_node["display"])
-		# Text position: put label on the outside of the ring, away from cluster centre
+        # Label goes outside the ring, away from the cluster centre.
         _cx, _cy = _S3_CLUSTER_CENTRES[_node["cluster"]]
         _dx, _dy = _x - _cx, _y - _cy
         if abs(_dx) > abs(_dy):
@@ -1971,12 +1896,10 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ── RoboBee case study — a example of §3's finding ──────────
+# RoboBee case study
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 st.markdown('<div class="chart-label">Case study — RoboBee</div>', unsafe_allow_html=True)
-# This case is drawn directly from Jacobs et al. (2025) — not from a corpus
-# query. The paper uses RoboBees as its central worked example; we surface
-# that example here to make the finding concrete.
+# Content comes from Jacobs et al. (2025), not from a corpus query.
 
 credibility_badge(has_real=True, has_sim=True)
 components.html("""
@@ -2056,7 +1979,7 @@ components.html("""
 </body></html>
 """, height=480)
 
-# ── Framing analysis diverging bar — real abstract vocabulary ──────
+# Framing analysis (framing.json)
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 st.markdown('<div class="chart-label">Framing analysis · abstract vocabulary</div>',
             unsafe_allow_html=True)
@@ -2070,10 +1993,7 @@ st.markdown("""
 </p>
 """, unsafe_allow_html=True)
 
-# Build the dataframe from real framing.json data. Support-leaning terms
-# sort first (largest support_per_1k first), Replace-leaning terms follow
-# (largest replace_per_1k first) — preserving a top-to-bottom "staircase"
-# within each group.
+# Support-leaning terms first, then Replace-leaning, each sorted by descending rate.
 _support_words = sorted(
     [w for w in FRAMING["words"] if w["side"] == "Support"],
     key=lambda w: w["support_per_1k"], reverse=True)
@@ -2123,8 +2043,6 @@ _frame3.update_layout(
                autorange="reversed", linecolor="#E5E1DA", gridcolor="rgba(0,0,0,0)"))
 st.plotly_chart(_frame3, use_container_width=True, config={"displayModeBar": False})
 
-# The finding worth flagging: Support-leaning vocabulary isn't ecological
-# language. It's biomimetic-surface and fluid-dynamics language. 
 
 st.markdown(f"""
 <div style="margin-top:1rem; padding: 1rem 1.2rem 1rem 1.5rem;
@@ -2151,10 +2069,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════
-# SECTION 4 · What 3% Teaches Us  
-# ═══════════════════════════════
-# section_sep()
+# Section 4: What 3% Teaches Us
 st.markdown('<div id="sec-3pct" class="sec-anchor"></div>', unsafe_allow_html=True)
 st.markdown('<div class="s4-eyebrow">Section 04 · What 3% Teaches Us</div>', unsafe_allow_html=True)
 st.markdown('<h2 class="s4-title">Imagining a Different Possibility.</h2>', unsafe_allow_html=True)
@@ -2172,7 +2087,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 
-# Build groups from live SVC_SUMMARY data.
 _real_groups4     = _s4_target_groups()
 _scenario_groups4 = _s4_scenario_groups(_real_groups4, 0.41, 0.39, 0.20)
 
@@ -2189,7 +2103,6 @@ _scen_all4  = _scen_tot4["replace"] + _scen_tot4["enhance"] + _scen_tot4["suppor
 def _fmt_pct4(v, total):
     return f"{v/total*100:.0f}%" if total else "—"
 
-# Critical-support flow for the callout narrative
 def _crit_support4(groups):
     for g in groups:
         if g["key"] == "critical":
@@ -2256,7 +2169,7 @@ _sankey4.update_layout(
 )
 st.plotly_chart(_sankey4, use_container_width=True, config={"displayModeBar": False})
 
-# Global accessibility map 
+# Global reach map
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 st.markdown('<div class="chart-label">Global reach — who can access replacement technologies?</div>',
             unsafe_allow_html=True)
@@ -2277,7 +2190,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# country × open-access data from country_oa.json
 _MAP_DATA4 = pd.DataFrame(COUNTRY_OA["countries"]).rename(columns={
     "country":         "Country",
     "region":          "Region",
@@ -2305,7 +2217,7 @@ _map4.update_layout(paper_bgcolor="#FFFFFF", geo_bgcolor="#FFFFFF",
                     font=dict(size=11, color="#2A2722", family="Inter, sans-serif")))
 st.plotly_chart(_map4, use_container_width=True, config={"displayModeBar": False})
 
-# ── 3% Spotlight — CAROUSEL ──
+# 3% spotlight carousel
 st.markdown('<div class="hr"></div>', unsafe_allow_html=True)
 st.markdown('<div class="chart-label">The 3% — technologies that chose to support</div>',
             unsafe_allow_html=True)
@@ -2339,7 +2251,7 @@ _SPOTLIGHT4 = [
 
 _n_spot = len(_SPOTLIGHT4)
  
-# Build slide blocks + dots from the data; 
+# Slide and dot HTML are generated from _SPOTLIGHT4.
 _slides_html = ""
 
 for _i, _c in enumerate(_SPOTLIGHT4):
@@ -2471,10 +2383,7 @@ components.html(_carousel_html, height=320)
 
 
 
-# ════════════════════════════════════════════════════════════════
-# SECTION 5 · You Belong Here  
-# ════════════════════════════════════════════════════════════════
-# section_sep()
+# Section 5: You Belong Here
 st.markdown('<div id="sec-belong" class="sec-anchor"></div>', unsafe_allow_html=True)
 st.markdown('<div class="eyebrow">Section 05 · You Belong Here</div>', unsafe_allow_html=True)
 
