@@ -1,10 +1,11 @@
 """
-clean_biom_data.py — Data cleaning pipeline for the BioM Innovation Database.
+clean_biom_data.py: clean the BioM Innovation Database Excel export into CSV tables.
 
-Input:  a single Excel file exported from the professors' Google Sheet.
-Output: five clean tables (cases, case_disciplines, case_keywords,
-        case_patents, case_ecosystem_services) plus a diagnostic report
+Input:  a single Excel file of the database.
+Output: five tables (cases, case_disciplines, case_keywords, case_patents,
+        case_ecosystem_services) plus suspected_shifted_rows.csv, a diagnostic
         of suspected row-level column shifts, all written as CSV.
+Personal-contact and internal interview-methodology columns are dropped.
 
 Usage:
     python clean_biom_data.py --input BIOM_DATABASE_FULL.xlsx --output-dir clean_output/
@@ -16,10 +17,6 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-
-# ════════════════════════════════════════════════════════════════
-# CONFIG
-# ════════════════════════════════════════════════════════════════
 
 PII_FIELDS_TO_DROP = [
     "Contact Name",
@@ -43,7 +40,7 @@ INTERNAL_METHODOLOGY_FIELDS = [
     "Copy of Patent in Dropbox Folder",
 ]
 
-# Multi-value fields, extracted into their own long-format child tables.
+# Multi-value field -> (child table, column); extract_multi_value_tables hard-codes these.
 MULTI_VALUE_FIELDS = {
     "Disciplines involved": ("case_disciplines", "discipline"),
     "Keywords": ("case_keywords", "keyword"),
@@ -77,8 +74,7 @@ FIELD_SPECIFIC_NA_OVERRIDES = {
     },
 }
 
-# Confirmed-bad values for whitelist-checked fields — blanked, not
-# force-mapped to anything.
+# Invalid values in whitelist-checked fields; blanked, not remapped.
 WHITELIST_BLANK_VALUES = {
     "Kingdom": {"viridae"},
     "Group": {"bacteria", "viruses"},
@@ -115,7 +111,7 @@ PHYLUM_WHITELIST = [
 ORGANIZATION_LEVEL_WHITELIST = [
     "Molecule", "Organelle", "Cell", "Tissue", "Organ", "Organ System",
     "Organism", "Population", "Community", "Ecosystem", "Biosphere",
-]  # Mimic System, Mimic Subsystem, Mimic Suprasystem
+]  # Used for Mimic System, Subsystem and Suprasystem
 
 PRODUCT_PHASE_WHITELIST = [
     "Concept", "In Development", "Commercially Available",
@@ -158,10 +154,9 @@ SHIFT_SUSPECT_YESNO_FIELDS = [
 ]
 
 
-# ════════════════════════════════════════════════════════════════
-# Data-quality report
-# ════════════════════════════════════════════════════════════════
 class QualityReport:
+    """Collects (severity, message) issues and prints them as a summary."""
+
     def __init__(self):
         self.issues = []
 
@@ -184,13 +179,10 @@ class QualityReport:
         print("═" * 70)
 
 
-# ════════════════════════════════════════════════════════════════
 # Cleaning steps
-# ════════════════════════════════════════════════════════════════
 def load_excel(path: Path) -> pd.DataFrame:
     try:
-        # "N/A" is a meaningful whitelisted value in this schema, not a
-        # blank cell — must not let pandas auto-coerce it to NaN.
+        # "N/A" is a valid whitelisted value, not a blank cell; keep pandas from coercing it.
         df = pd.read_excel(path, keep_default_na=False, na_values=[""])
     except FileNotFoundError:
         sys.exit(f"Input file not found: {path}")
@@ -232,6 +224,7 @@ def drop_internal_methodology_fields(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def normalize_yes_no(df: pd.DataFrame, report: QualityReport) -> pd.DataFrame:
+    """Map Yes/No columns to True/False/NA; unrecognized values are kept and flagged."""
     for col in YES_NO_FIELDS:
         if col not in df.columns:
             continue
@@ -280,9 +273,7 @@ def blank_known_bad_values(df: pd.DataFrame, report: QualityReport) -> pd.DataFr
 
 
 def blank_multivalue_location_fields(df: pd.DataFrame, report: QualityReport) -> pd.DataFrame:
-    """Any Continent or Country value containing ';' is almost certainly
-    multiple locations joined together, not a single value — confirmed
-    pattern for both fields (Sep 2026). Blanked rather than guessed at."""
+    """Blank Continent/Country values containing ';' (multiple locations joined)."""
     for col in ["Continent", "Country"]:
         if col not in df.columns:
             continue
@@ -301,6 +292,7 @@ def blank_multivalue_location_fields(df: pd.DataFrame, report: QualityReport) ->
 
 
 def normalize_whitelist_case(df: pd.DataFrame, col: str, whitelist: list, report: QualityReport) -> pd.DataFrame:
+    """Rewrite values differing from a whitelist entry only by case or outer whitespace."""
     if col not in df.columns:
         return df
     case_map = {w.lower(): w for w in whitelist}
@@ -315,8 +307,7 @@ def normalize_whitelist_case(df: pd.DataFrame, col: str, whitelist: list, report
         return canonical if canonical is not None else v
 
     fixed = df[col].apply(_fix)
-    # NA-vs-NA can stringify inconsistently across dtypes — compare
-    # directly instead of via astype(str) to avoid false-positive counts.
+    # Compare directly; astype(str) can stringify NA inconsistently across dtypes.
     n_changed = int(((fixed != df[col]) & fixed.notna() & df[col].notna()).sum())
     if n_changed:
         report.flag(f"Column '{col}': normalized casing on {n_changed} value(s) to match the whitelist exactly.", "WARNING")
@@ -325,6 +316,7 @@ def normalize_whitelist_case(df: pd.DataFrame, col: str, whitelist: list, report
 
 
 def validate_whitelist(df: pd.DataFrame, col: str, whitelist: list, report: QualityReport):
+    """Flag as ERROR any value (stripped) that is not in the whitelist."""
     if col not in df.columns:
         return
     actual = df[col].dropna().unique().tolist()
@@ -334,6 +326,7 @@ def validate_whitelist(df: pd.DataFrame, col: str, whitelist: list, report: Qual
 
 
 def split_biom_type(df: pd.DataFrame, report: QualityReport) -> pd.DataFrame:
+    """Replace 'BioM Type' with boolean biom_type_<component> columns and biom_type_na."""
     col = "BioM Type"
     if col not in df.columns:
         return df
@@ -356,6 +349,7 @@ def split_biom_type(df: pd.DataFrame, report: QualityReport) -> pd.DataFrame:
 
 
 def extract_multi_value_tables(df: pd.DataFrame, id_col: str, report: QualityReport) -> tuple:
+    """Split Disciplines/Keywords into child tables; return (df, disciplines, keywords)."""
     disciplines_rows = []
     keywords_rows = []
 
@@ -396,6 +390,7 @@ def extract_multi_value_tables(df: pd.DataFrame, id_col: str, report: QualityRep
 
 
 def extract_ecosystem_services_table(df: pd.DataFrame, id_col: str, report: QualityReport) -> tuple:
+    """Split comma-separated 'Which one?' into a child table; return (df, services)."""
     rows = []
     col = "Which one?"
     es_col = "Is this an Ecosystem Service"
@@ -433,6 +428,7 @@ def extract_ecosystem_services_table(df: pd.DataFrame, id_col: str, report: Qual
 
 
 def extract_patents_table(df: pd.DataFrame, id_col: str, report: QualityReport) -> pd.DataFrame:
+    """Pair newline-delimited patent years and numbers by position, one row per pair."""
     rows = []
     if PATENT_YEAR_FIELD not in df.columns and PATENT_NUMBER_FIELD not in df.columns:
         return pd.DataFrame(rows)
@@ -466,10 +462,9 @@ def extract_patents_table(df: pd.DataFrame, id_col: str, report: QualityReport) 
     return pd.DataFrame(rows)
 
 
-# ════════════════════════════════════════════════════════════════
-# Diagnostic: suspected row-level column shifts (never modifies data)
-# ════════════════════════════════════════════════════════════════
+# Row-level column shifts
 def diagnose_shifted_rows(df_before_cleaning: pd.DataFrame, id_col: str) -> pd.DataFrame:
+    """Return values that look shifted in from a neighbouring column (input unchanged)."""
     suspects = []
 
     for field, own_whitelist, neighbor_whitelist in SHIFT_CHECK_CHAIN:
@@ -521,6 +516,7 @@ def diagnose_shifted_rows(df_before_cleaning: pd.DataFrame, id_col: str) -> pd.D
 
 
 def correct_academia_industry_shift(df: pd.DataFrame, id_col: str, report: QualityReport) -> pd.DataFrame:
+    """Shift fields left one column where 'Academia or Industry' is blank but its value is next."""
     if "Academia or Industry" not in df.columns or "Company or Institution Name" not in df.columns:
         return df
 
@@ -549,11 +545,9 @@ def correct_academia_industry_shift(df: pd.DataFrame, id_col: str, report: Quali
     return df
 
 
-# ════════════════════════════════════════════════════════════════
 # Year parsing
-# ════════════════════════════════════════════════════════════════
 def _parse_year_value(raw):
-    """Returns (year: int or pd.NA, qualifier: 'approximate' | 'expected' | None)."""
+    """Return (year, qualifier); year is int or pd.NA, qualifier 'approximate', 'expected' or None."""
     if pd.isna(raw):
         return pd.NA, None
     s = str(raw).strip()
@@ -588,6 +582,7 @@ def _parse_year_value(raw):
 
 
 def parse_year_field(df: pd.DataFrame, col: str, report: QualityReport) -> pd.DataFrame:
+    """Replace col with <col>_year, <col>_year_raw and <col>_year_qualifier columns."""
     if col not in df.columns:
         return df
 
@@ -636,6 +631,7 @@ def clean_product_text_fields(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def generate_display_name(df: pd.DataFrame, report: QualityReport) -> pd.DataFrame:
+    """Add display_name from Product Name, falling back to Mimic, Company, then a default."""
     def _fallback(row):
         name = row.get("Product Name")
         if pd.notna(name):
@@ -656,6 +652,7 @@ def generate_display_name(df: pd.DataFrame, report: QualityReport) -> pd.DataFra
 
 
 def ensure_id_column(df: pd.DataFrame, report: QualityReport) -> tuple:
+    """Return (df, 'case_id'), using an existing ID column or generating one."""
     def _as_clean_int(df: pd.DataFrame) -> pd.DataFrame:
         try:
             df["case_id"] = pd.to_numeric(df["case_id"], errors="coerce").astype("Int64")
@@ -688,10 +685,9 @@ def ensure_id_column(df: pd.DataFrame, report: QualityReport) -> tuple:
     return df, "case_id"
 
 
-# ════════════════════════════════════════════════════════════════
 # Main pipeline
-# ════════════════════════════════════════════════════════════════
 def run_pipeline(input_path: Path, output_dir: Path):
+    """Run all cleaning steps, write CSVs to output_dir, and return the tables and report."""
     report = QualityReport()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -709,8 +705,7 @@ def run_pipeline(input_path: Path, output_dir: Path):
     df = drop_pii(df, report)
     df = drop_internal_methodology_fields(df)
 
-    # Snapshot taken after exclusions but before value rewrites, so the
-    # diagnostic sees raw text for everything that's still in scope.
+    # Runs before value normalisation so the diagnostic sees raw text.
     shift_diagnostics = diagnose_shifted_rows(df, id_col)
 
     df = normalize_yes_no(df, report)
