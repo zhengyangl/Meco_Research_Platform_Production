@@ -12,7 +12,7 @@ classifications for the same wos_ids are retired before new ones are inserted.
 classification_audit stores LLM call metadata only, not reviewer identity.
 
 Usage:
-    export DATABASE_URL="postgresql://pipeline_user:***@127.0.0.1:5432/me_dashboard"
+    export DATABASE_URL="postgresql://pipeline_user:<password>@127.0.0.1:5432/me_dashboard"
 
     python ingest_incremental.py \\
         --wos-export new_batch_raw_wos.xlsx \\
