@@ -206,7 +206,6 @@ def get_filtered_cases() -> pd.DataFrame:
 st.markdown(
     f"""
     <div class="hero-box">
-        <span class="hero-nav-placeholder">Research Tools ↗ (coming soon)</span>
         <h1>BioM Innovation Database</h1>
         <p>{len(cases_all):,} cases of biology inspiring innovation, from lab research to commercial products.</p>
     </div>
