@@ -1416,16 +1416,16 @@ with st.expander("🚩 Report a Misclassification"):
 
         with st.form("feedback_form", clear_on_submit=True):
             _sug_category = st.selectbox(
-                "Suggested paradigm",
+                "Suggested Paradigm",
                 options=["Replace", "Enhance", "Support", "Not sure — just flagging"],
             )
             _sug_service = st.selectbox(
-                "Suggested ecosystem service (optional)",
+                "Suggested Ecosystem Service (Optional)",
                 options=["(no change / not sure)"] + _ALL_SERVICES,
             )
             _reason = st.text_area("Why do you think this is misclassified?", height=100)
             _email = st.text_input(
-                "Your email (optional)",
+                "Your Email (Optional)",
                 placeholder="you@institution.edu",
             )
             _submitted = st.form_submit_button("Submit report")
