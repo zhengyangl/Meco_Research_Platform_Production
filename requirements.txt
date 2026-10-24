@@ -1,6 +1,6 @@
 # Dashboard requirements — narrative page (app.py) + Data Explorer (pages/explorer.py)
 
-streamlit>=1.58.0
+streamlit==1.66.0
 pandas>=2.0
 plotly>=5.18
 numpy>=1.26
