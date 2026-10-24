@@ -114,6 +114,11 @@ div[data-testid="stRadio"] label {
     font: 600 .7rem/1.2 'Inter', sans-serif !important;
     color: #475569 !important; text-transform: uppercase !important;
 }
+/* Report a Misclassification form: keep labels in normal case */
+div[data-testid="stExpander"] div[data-testid="stSelectbox"] label,
+div[data-testid="stExpander"] div[data-testid="stTextInput"] label {
+    text-transform: none !important;
+}
 
 /* Sidebar "Clear all" button — subtle, ghost-style */
 [data-testid="stSidebar"] div[data-testid="stButton"] > button {
