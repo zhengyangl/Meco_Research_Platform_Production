@@ -119,14 +119,16 @@ h1.hero-title {
 .insight-cta   { font: 500 .75rem/1 'Inter', sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #3D7A52; }
 .insight-empty { text-align: center; padding: 2rem; color: #B8B0A4; font: 300 .88rem/1.6 'Inter', sans-serif; }
  
-div:has(> button[data-testid*="stBaseButton-pill"]) {
+div:has(> button[data-testid*="stBaseButton-pill"]),
+div[role="toolbar"]:has(> button[data-variant^="pills"]) {
     justify-content: center !important;
     gap: 14px 12px !important;
     padding: 10px 0 20px 0;
 }
  
 button[data-testid="stBaseButton-pills"],
-button[data-testid="stBaseButton-pillsActive"] {
+button[data-testid="stBaseButton-pillsActive"],
+button[data-variant^="pills"] {
     background-color: #FDFCFA !important;
     border: 1px solid #D6D2CC !important;
     border-radius: 30px !important;
@@ -143,7 +145,9 @@ button[data-testid="stBaseButton-pillsActive"] {
 }
  
 button[data-testid="stBaseButton-pills"]:hover,
+button[data-variant^="pills"]:hover {
 button[data-testid="stBaseButton-pillsActive"]:hover {
+button[data-variant^="pills"]:active {
     transform: translateY(-1px) !important;
     box-shadow: 0 3px 8px rgba(61,122,82,0.08) !important;
     border-color: #3D7A52 !important;
@@ -158,6 +162,7 @@ button[data-testid="stBaseButton-pillsActive"]:active {
 }
  
 button[data-testid="stBaseButton-pillsActive"] {
+button[data-variant^="pills"][aria-pressed="true"] {
     background-color: rgba(61, 122, 82, 0.08) !important;
     border: 1.5px solid #3D7A52 !important;
     color: #356B49 !important;
