@@ -117,7 +117,7 @@ GRID_THEME = StAggridTheme(base="alpine").withParams(
     accentColor="#1D9E75",                 # checkboxes, focus ring  (--teal)
     foregroundColor="#1E2D24",             # cell text               (--charcoal)
     borderColor="#DCE8E2",                 # grid + row borders      (--border)
-    headerBackgroundColor="#E1F5EE",       # header band             (--pale-teal)
+    headerBackgroundColor="#FFFFFF",       # header band             (white)
     headerTextColor="#0A2E1F",             #                         (--dark-green)
     headerFontWeight=600,
     rowHoverColor="#F0F8F4",
