@@ -145,9 +145,8 @@ button[data-variant^="pills"] {
 }
  
 button[data-testid="stBaseButton-pills"]:hover,
+button[data-testid="stBaseButton-pillsActive"]:hover,
 button[data-variant^="pills"]:hover {
-button[data-testid="stBaseButton-pillsActive"]:hover {
-button[data-variant^="pills"]:active {
     transform: translateY(-1px) !important;
     box-shadow: 0 3px 8px rgba(61,122,82,0.08) !important;
     border-color: #3D7A52 !important;
@@ -156,12 +155,13 @@ button[data-variant^="pills"]:active {
 }
  
 button[data-testid="stBaseButton-pills"]:active,
-button[data-testid="stBaseButton-pillsActive"]:active {
+button[data-testid="stBaseButton-pillsActive"]:active,
+button[data-variant^="pills"]:active {
     transform: translateY(0) !important;
     box-shadow: 0 1px 2px rgba(61,122,82,0.08) !important;
 }
  
-button[data-testid="stBaseButton-pillsActive"] {
+button[data-testid="stBaseButton-pillsActive"],
 button[data-variant^="pills"][aria-pressed="true"] {
     background-color: rgba(61, 122, 82, 0.08) !important;
     border: 1.5px solid #3D7A52 !important;
@@ -171,7 +171,8 @@ button[data-variant^="pills"][aria-pressed="true"] {
     transform: translateY(0) !important; 
 }
  
-button[data-testid*="stBaseButton-pill"]:focus-visible {
+button[data-testid*="stBaseButton-pill"]:focus-visible,
+button[data-variant^="pills"]:focus-visible {
     box-shadow: none !important;
     outline: none !important;
 }
