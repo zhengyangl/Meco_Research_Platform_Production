@@ -4,7 +4,7 @@ streamlit==1.66.0
 pandas>=2.0
 plotly>=5.18
 numpy>=1.26
-pyarrow>=14.0          # parquet engine
+pyarrow>=14.0,<25      # parquet engine; 24.0.0 on the production server (26.0.0 reported to crash)
 openpyxl>=3.1         
 streamlit-aggrid==1.2.1.post2
 
