@@ -1,6 +1,6 @@
 # Handover Guide
 
-*Last updated: August 2026*
+*Last updated: October 29, 2026*
 
 This is the day-to-day operating manual. For one-time setup (AWS, database, credentials), see `environment_setup.md` — do that first if you haven't already. For how the system is designed and why, see `architecture.md`.
 
@@ -18,11 +18,13 @@ The repository also contains a second, independent platform: the BioM Innovation
 
 The pipeline uses three separate Google resources, all shared with the same service account (see `environment_setup.md` Section 8 for how the account itself is set up).
 
-| Resource | What it's for | Used by | Current ID (⚠ swap for your own — see note below) |
+| Resource | What it's for | Used by | Current ID |
 |---|---|---|---|
-| **Review Sheet** | Pre-ingestion QC queue — papers the model was only medium/low confidence about | `classify.py` (pushes rows), `run_pipeline.py reviewed` (pulls finished rows) | `15MvAFOnq7b0dGKqzQZPCTwxhSgJdGNmQn8YZFw8BleA`, worksheet `needs_review` |
-| **Feedback Sheet** | Crowd-sourced misclassification reports, submitted by dashboard visitors on already-published papers | `explorer.py`'s "Report a Misclassification" form | `1NV89GAdZJfdDSRS1M5ndxjALg8YSvK94WV8iqhnPmbs` *(⚠ inherited from project notes — confirm this is still the correct sheet before relying on it)* |
-| **Drive upload folder** | Where a researcher drops a new raw WoS export | `run_pipeline.py new-data` (detects new files here) | `1D6pNaDPJFiRqlcTpL-lux3tCyWs3HuRU` — **explicitly temporary**, created for development. Must be replaced with a real production folder before this goes live long-term. |
+| **Review Sheet** | Pre-ingestion QC queue — papers the model was only medium/low confidence about | `classify.py` (pushes rows), `run_pipeline.py reviewed` (pulls finished rows) | `1Ej671TNO1Ep-sm7NT547CynPub_8z3MjHZMEgFNbvt4`, worksheet `needs_review` |
+| **Feedback Sheet** | Crowd-sourced misclassification reports, submitted by dashboard visitors on already-published papers | `explorer.py`'s "Report a Misclassification" form | `13mxr3glIdgMZji2hcLnuU9ETGVRqShacTbEXrK3E6Bw` |
+| **Drive upload folder** | Where a researcher drops a new raw WoS export | `run_pipeline.py new-data` (detects new files here) | `1PTPH4Jz4XKFrmKCY4uy2ctPKR3_MfuyP` — the folder "MEco - New WoS Uploads", owned by Dr. Jacobs' Google account and shared with the service account as Editor. |
+
+On the production server the two Sheet IDs are set in `~/meco_dashboard/.env` (`REVIEW_SHEET_ID`, `FEEDBACK_SHEET_ID`), which override the defaults written in the code (those defaults still point to the original project's sheets). The Drive folder ID has no environment override — it is written directly in `pipeline/run_pipeline.py` (`DRIVE_FOLDER_ID`). These IDs are identifiers, not credentials: access is controlled by sharing. Keep each resource shared only with named accounts (General access: Restricted), never "Anyone with the link".
 
 **⚠ If you're setting this up fresh (not continuing from the original project), create your own Sheets and Drive folder rather than reusing these IDs.** Reusing someone else's live spreadsheet means your test runs and the original maintainer's real data end up mixed together. Whichever IDs you land on:
 
@@ -39,19 +41,28 @@ The Review Sheet also holds four reviewer-override columns (`reviewer_decision`,
 
 Nothing here runs on its own by default — someone needs to trigger each piece, either by hand or by setting up a cron job.
 
+Run these from the pipeline folder, after loading the server's `.env` in the same terminal session:
+
+​```bash
+cd ~/meco_dashboard/pipeline
+set -a && source ../.env && set +a
+​```
+
+Add `--dry-run` to `new-data` to list the files it would process without downloading, classifying or writing anything.
+
 | Command | When to run it | Suggested cadence |
 |---|---|---|
-| `python run_pipeline.py new-data` | After a researcher uploads a new WoS export to Drive | On demand, or a daily cron check |
-| `python run_pipeline.py reviewed` | To pick up whatever's been finished in the Review Sheet | Daily |
-| `python run_pipeline.py aggregate` | To refresh the narrative page's files and the Explorer's fallback snapshot | Weekly |
+| `python3 run_pipeline.py new-data` | After a researcher uploads a new WoS export to Drive | On demand, or a daily cron check |
+| `python3 run_pipeline.py reviewed` | To pick up whatever's been finished in the Review Sheet | Daily |
+| `python3 run_pipeline.py aggregate` | To refresh the narrative page's files and the Explorer's fallback snapshot | Weekly |
 
 These three are independent — see `architecture.md` Section 3.4 for why they're not one combined command. Running one doesn't require or trigger the others.
 
 The Explorer itself needs no manual step — it queries the database directly and refreshes on its own every 15 minutes.
 
-### 3.1 If self-hosted on EC2 (see environment_setup.md Section 11)
+### 3.1 Production server (EC2 + nginx; see environment_setup.md Section 11)
 
-Once the dashboards move off Streamlit Community Cloud, they run as two systemd services instead of ad-hoc `streamlit run` commands:
+The dashboards run as two systemd services on the production server:
 
 | Service | What it serves |
 |---|---|
@@ -64,10 +75,25 @@ sudo systemctl restart meco-dashboard     # restart after a code update or .env 
 sudo journalctl -u meco-dashboard -f      # tail live logs
 ```
 
-The same commands apply to `biom-dashboard`. After pulling new code (`cd ~/meco_dashboard && git pull`), restart whichever service the change affects. This is not yet the current setup — see Section 9.
+The same commands apply to `biom-dashboard`. After pulling new code (`cd ~/meco_dashboard && git pull`), restart whichever service the change affects. 
 
 **Updating the BioM data.** The BioM dashboard reads only the CSV files in `biom-dashboard/data/clean/`. To rebuild them from a new Excel export, run the three scripts in `biom-dashboard/pipeline/` from that folder, in this order: `clean_biom_data.py`, `geocode_countries.py`, `validate_cleaned_output.py` (details in `biom-dashboard/docs/data_cleaning_notes.md`). Commit the updated CSVs, `git pull` on the server, and `sudo systemctl restart biom-dashboard`.
 
+### 3.2 How the two pages are served
+
+| Page | URL | systemd service | Internal port | Code location |
+|---|---|---|---|---|
+| MEco (narrative page + Explorer) | https://meco.manufacturedecosystems.com | `meco-dashboard` | 8501 | `~/meco_dashboard` (`app.py`, `pages/explorer.py`) |
+| BioM Innovation Database | https://biom.manufacturedecosystems.com | `biom-dashboard` | 8502 | `~/meco_dashboard/biom-dashboard` (its own virtual environment) |
+
+- Both apps listen on `127.0.0.1` only. nginx is the public entry point (ports 80/443) and forwards each hostname to its app. Config files: `/etc/nginx/sites-available/meco-dashboard` and `biom-dashboard`.
+- HTTPS uses one Let's Encrypt certificate covering both hostnames, issued with certbot and renewed automatically (`certbot.timer`). To check renewal: `sudo certbot renew --dry-run`.
+- The AWS security group allows ports 80 and 443 from anywhere and SSH (port 22) only from specific IP addresses. Ports 8501/8502 are not exposed.
+- DNS: the `meco` and `biom` A records at the domain registrar point to the server's static (Elastic) IP. If the server is ever rebuilt with a new IP, update both records. **[To fill in: who holds the registrar account, and whether domain auto-renewal is on.]**
+- The ME website (manufacturedecosystems.com) links to the two pages from its navigation and opens them in a new window. They are deliberately **not** embedded in iframes: an iframe leaves the website's navigation and footer around a data platform and makes the layout hard to control.
+- **Updating code:** edit on GitHub, then `cd ~/meco_dashboard && git pull` on the server and restart the affected service (`meco-dashboard` and/or `biom-dashboard`).
+- **Pinned versions:** MEco runs Streamlit 1.66.0 and `streamlit-aggrid` 1.2.1.post2; BioM runs Streamlit 1.64.0 (see each `requirements.txt`). `pyarrow` is held at 24.0.0 on the server as a precaution against a crash reported with 26.0.0. The page styling depends on Streamlit's internal page structure, which changes between versions (for example, pill buttons changed from `data-testid="stBaseButton-pills"` to `data-variant="pills"`). **Before upgrading Streamlit, check the narrative page's pill buttons and the Explorer's tabs and sidebar filters.**
+  
 ---
 
 ## 4. Connecting to the server and database
@@ -75,8 +101,7 @@ The same commands apply to `biom-dashboard`. After pulling new code (`cd ~/meco_
 ### 4.1 Direct SSH + psql (quickest for a one-off check)
 
 ```bash
-cd ~/Downloads   # wherever your .pem key lives
-ssh -i my-aws-key.pem ubuntu@<SERVER_PUBLIC_IP>
+ssh -i <path-to-your-private-key> ubuntu@meco.manufacturedecosystems.com
 
 # once connected:
 psql -U pipeline_user -d me_dashboard -h 127.0.0.1 -W
@@ -93,6 +118,8 @@ SELECT COUNT(*) FROM papers;                     -- every query needs a trailing
 
 Then `exit` to leave the SSH session.
 
+Your public key must be listed in `~ubuntu/.ssh/authorized_keys` on the server, and your current public IP must be allowed on port 22 in the AWS security group (see the troubleshooting table in Section 6).
+
 ### 4.2 SSH tunnel + local Jupyter (for data exploration, not production)
 
 Useful when you want to explore data or write/debug new code with fast feedback, without editing files on the server directly.
@@ -100,7 +127,7 @@ Useful when you want to explore data or write/debug new code with fast feedback,
 Open a tunnel in one Terminal window and leave it running:
 
 ```bash
-ssh -i ~/Downloads/my-aws-key.pem -L 5432:localhost:5432 ubuntu@<SERVER_PUBLIC_IP> -N
+ssh -i <path-to-your-private-key> -L 5432:localhost:5432 ubuntu@meco.manufacturedecosystems.com -N
 ```
 
 This makes `localhost:5432` on your own machine act as if it were the server's PostgreSQL. In a separate Jupyter notebook (or any local Python):
@@ -147,15 +174,15 @@ conn.close()
 
 ```bash
 # 1. Upload your locally-edited script to the server
-scp -i ~/Downloads/my-aws-key.pem ~/Desktop/aggregate.py ubuntu@<SERVER_PUBLIC_IP>:~/
+scp -i <path-to-your-private-key> ~/Desktop/aggregate.py ubuntu@meco.manufacturedecosystems.com:~/
 
 # 2. Connect and run it
-ssh -i ~/Downloads/my-aws-key.pem ubuntu@<SERVER_PUBLIC_IP>
+ssh -i <path-to-your-private-key> ubuntu@meco.manufacturedecosystems.com
 python3 ~/aggregate.py
 exit
 
 # 3. Pull the results back down to your own machine
-scp -i ~/Downloads/my-aws-key.pem ubuntu@<SERVER_PUBLIC_IP>:~/dashboard_data/corpus_meta.json ~/Desktop/meco_dashboard/dashboard_data/
+scp -i <path-to-your-private-key> ubuntu@meco.manufacturedecosystems.com:~/dashboard_data/corpus_meta.json ~/Desktop/meco_dashboard/dashboard_data/
 ```
 
 If you use this to test a change to a pipeline script, remember to also commit the finished version to the repository and run `git pull` in `~/meco_dashboard` on the server once you're done testing — otherwise the automated pipeline keeps running the old version. Avoid editing files inside `~/meco_dashboard` directly on the server, since that makes the next `git pull` conflict.
@@ -176,7 +203,9 @@ Real issues hit while building and testing this pipeline, in case they come up a
 | `pip install` fails with a disk-related error even though `df -h` shows plenty of free space | `/tmp` is a small tmpfs (RAM-backed), not the main disk — large packages like `torch` don't fit there even when the real disk has room | `mkdir -p ~/pip_tmp && export TMPDIR=~/pip_tmp` before installing. Full detail in `environment_setup.md` Section 5. |
 | `UserWarning: pandas only supports SQLAlchemy connectable...` when using `pd.read_sql` with a raw `psycopg2` connection | Harmless — pandas prefers a SQLAlchemy engine but works fine with a plain `psycopg2` connection too | Safe to ignore. |
 | `file_cache is only supported with oauth2client<4.0.0` when using the Google Drive API | A version-mismatch warning from the `google-api-python-client` library | Harmless, doesn't affect functionality. Only worth fixing if it becomes visually annoying — not a functional bug. |
-| Explorer's sidebar filters don't respond when clicked (page loads, nothing happens) — *only applies once self-hosted, see environment_setup.md Section 11* | nginx reverse proxy is missing the WebSocket headers (`proxy_http_version 1.1`, `Upgrade`/`Connection`) — Streamlit needs a live WebSocket for interactivity | Add the missing headers to the nginx config block, then `sudo nginx -t && sudo systemctl restart nginx` |
+| Explorer's sidebar filters don't respond when clicked (page loads, nothing happens)  — see environment_setup.md Section 11 | nginx reverse proxy is missing the WebSocket headers (`proxy_http_version 1.1`, `Upgrade`/`Connection`) — Streamlit needs a live WebSocket for interactivity | Add the missing headers to the nginx config block, then `sudo nginx -t && sudo systemctl restart nginx` |
+| `ssh: connect to host … port 22: Operation timed out` | The security group only allows SSH from specific IP addresses, and your public IP has changed | AWS console → EC2 → the instance's security group (`meco-biom-sg`) → Edit inbound rules → on the SSH (port 22) rule set Source to "My IP" → Save. Do not change the 80/443 rules. |
+| Pill buttons, tabs or other widgets suddenly lose their styling after a Streamlit upgrade | The custom CSS targets Streamlit's internal markup, which changes between versions | Keep Streamlit pinned. After any upgrade, check the narrative page and Explorer; inspect the element in the browser and add the new selector next to the old one in the CSS. |
 
 ---
 
@@ -217,6 +246,5 @@ Real issues hit while building and testing this pipeline, in case they come up a
 ## 9. Known limitations and open items
 
 - **`cluster_technologies()`'s low-confidence assignments aren't blocked, only logged.** A new paper with a technology phrase that doesn't closely resemble any of the 25 existing clusters still gets force-assigned to the nearest one. If the "low confidence" count in a run's output starts looking large, that's a signal the 25 clusters may need revisiting (see `data_dictionary.md` Section 7) — the pipeline won't decide that on its own.
-- **The full `new-data` chain hasn't been run end-to-end against real new papers in production yet.** Drive detection has been confirmed working. The individual pieces (`classify.py`, `ingest_incremental.py`, `text_analysis.py`) have each been tested separately, and `cluster_technologies()` specifically has been run for real against the live database (successfully recomputed centroids from 35,433 labeled papers). But the full chain — a real new file, classified, auto-ingested, and features extracted, all through `run_pipeline.py new-data` without `--dry-run` — has not yet been exercised together. Do this as an early test with a small batch before relying on it for anything real.
-- **The Feedback Sheet ID in Section 2 needs confirming.** It's carried over from project notes rather than freshly verified against `explorer.py`'s actual configuration.
+- **Hosting.** Both dashboards are self-hosted on the EC2 server described in Section 3.2. Any older copy on Streamlit Community Cloud is no longer the source of truth and can be retired. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
 - **The dashboard is still hosted on Streamlit Community Cloud, not the self-hosted EC2 + nginx setup described in `environment_setup.md` Section 11.** That migration is planned — motivated by removing Streamlit's free-tier branding icons for a cleaner embed into the ME website — but hasn't been executed yet. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
