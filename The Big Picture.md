@@ -54,7 +54,7 @@ Mostly the **researchers** who kept asking us for the data in the first place. B
 | If you want to... | Go to |
 |---|---|
 | See the platforms live | [meco.manufacturedecosystems.com](https://meco.manufacturedecosystems.com) |
-| Understand how the whole system is built, and why | [`architecture.md`](architecture.md) |
-| Know what the data actually means (ecosystem services, the Replace/Enhance/Support labels) | [`data_dictionary.md`](data_dictionary.md) |
-| Set the system up from scratch | [`environment_setup.md`](environment_setup.md) |
-| Operate it day to day | [`handover.md`](handover.md) |
+| Understand how the whole system is built, and why | [`architecture.md`](docs/architecture.md) |
+| Know what the data actually means (ecosystem services, the Replace/Enhance/Support labels) | [`data_dictionary.md`](docs/data_dictionary.md) |
+| Set the system up from scratch | [`environment_setup.md`](docs/environment_setup.md) |
+| Operate it day to day | [`handover.md`](docs/handover.md) |
