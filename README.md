@@ -1,16 +1,11 @@
 # MEco Research Data Platform
 
 **"Nature Is Not Optional."**
+> 👉 **New here? Start with [The Big Picture](docs/overview.md)** — a plain-language intro to what this project is and why it exists, no technical background needed.
 
-An interactive research dashboard exploring how biomimetics and bio-inspired
-technologies replace, enhance, or support the 22 ecosystem services people
-depend on — built on LLM-annotated classifications of Web of Science
-literature, following the framework of Jacobs et al. (2025).
+An interactive research dashboard exploring how biomimetics and bio-inspired technologies replace, enhance, or support the 22 ecosystem services people depend on — built on LLM-annotated classifications of Web of Science literature, following the framework of Jacobs et al. (2025).
 
-The dashboard is the visible face of a larger **Living Data Asset**: an
-automated pipeline (ingestion → LLM classification → human review for
-uncertain cases → NLP feature extraction → aggregation) that keeps the
-underlying research corpus growing and versioned over time.
+The dashboard is the visible face of a larger **Living Data Asset**: an automated pipeline (ingestion → LLM classification → human review for uncertain cases → NLP feature extraction → aggregation) that keeps the underlying research corpus growing and versioned over time.
 
 ---
 
