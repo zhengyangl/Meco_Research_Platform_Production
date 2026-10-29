@@ -2578,3 +2578,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("<br><br>", unsafe_allow_html=True)
+
+with st.expander("How to Cite"):
+    st.caption("Please cite this platform as:")
+    st.code(
+        "Li, Z., Zhang, J., Wanieck, K., Wu, Y., Rait, K., Patel, S., Gillis, D., & Jacobs, S. (2026). "
+        "MEco Research Data Platform: Literature Explorer. Manufactured Ecosystems. "
+        "https://meco.manufacturedecosystems.com",
+        language=None,
+        wrap_lines=True,
+    )
