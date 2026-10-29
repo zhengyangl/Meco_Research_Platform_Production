@@ -3,7 +3,7 @@
 -- ════════════════════════════════════════════════════════════════
 -- Run this once, on a freshly installed PostgreSQL instance, to set up
 -- everything the pipeline needs: the database, the pipeline_user role,
--- and all five tables.
+-- and all seven tables.
 --
 -- This DDL matches what's actually running in production — confirmed
 -- against the live database (see docs/data_schema_supplement.md for the
@@ -14,7 +14,8 @@
 -- 2. Log in as the default PostgreSQL superuser:
 --        sudo -i -u postgres psql
 -- 3. Paste this whole file in, OR run it directly from the shell:
---        sudo -u postgres psql -f schema.sql
+--        sudo -u postgres psql < schema.sql
+--    (use "<", not "-f": the postgres user cannot read files under /home/ubuntu)
 -- 4. CHANGE THE PASSWORD BELOW FIRST — do not use the placeholder.
 --
 -- After this runs, update DATABASE_URL (see .env.example) to:
@@ -29,7 +30,7 @@ CREATE DATABASE me_dashboard;
 -- interactively into `psql` as postgres, connect to the new database
 -- first:
 --   \c me_dashboard
--- If running this whole file with `psql -f schema.sql`, the \c below
+-- If running this whole file with `psql < schema.sql`, the \c below
 -- does that for you.
 \c me_dashboard
 
@@ -149,6 +150,20 @@ CREATE TABLE pipeline_runs (
     git_commit_hash  TEXT
 );
 
+-- Frozen, one-time copy of `classifications` for the original published
+-- corpus (see docs/architecture.md, Section 3.3). Read by aggregate.py to
+-- build the narrative page's numbers. This script creates it EMPTY — the
+-- rows come from a one-time import from the original database.
+CREATE TABLE classifications_narrative_snapshot (
+    wos_id            TEXT PRIMARY KEY,
+    decision          CHAR(1),
+    category          TEXT,
+    ecosystem_service TEXT,
+    technology        TEXT,
+    model_version     TEXT,
+    prompt_version    TEXT,
+    created_at        TIMESTAMPTZ
+);
 
 -- ── 4. Grant table-level privileges to pipeline_user ────────────────
 -- The database-level GRANT above covers connecting; these cover
