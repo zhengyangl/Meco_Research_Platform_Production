@@ -19,3 +19,6 @@ google-api-python-client>=2.130
 
 # text_analysis.py — cluster_technologies() nearest-centroid embeddings
 sentence-transformers>=3.0
+
+# text_analysis.py — country handling (imported inside the function that needs it)
+pycountry==26.2.16
