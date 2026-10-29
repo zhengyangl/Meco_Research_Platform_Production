@@ -139,6 +139,7 @@ If you land on a `me_dashboard=>` prompt, it worked. A few commands to try:
 SELECT COUNT(*) FROM papers;   -- should return 0 on a fresh install
 \q                    -- exit
 ```
+The existing data (papers, labels, snapshot) is loaded later, once the code and environment variables are in place — see Section 9.1.
 
 ---
 
@@ -343,6 +344,85 @@ Write plain `KEY=value` lines with no `export` and no quotes — the same file i
 
 To use these variables in an interactive SSH session (for example to run the pipeline by hand), load them first: `set -a; source ~/meco_dashboard/.env; set +a`. Variables exported in a plain SSH session disappear when you disconnect.
 
+### 9.1 Load the existing data (one-time)
+
+This was done once, when the production server was first set up. It is only needed to rebuild the database from scratch. Routine updates go through the pipeline (see the handover guide). Run it after Sections 3, 5, 6 and 9 are complete, in an SSH session where the variables are loaded (`set -a; source ~/meco_dashboard/.env; set +a`).
+
+**Source files.** Copy these four files to `~/initial_data/` on the server (for example with `scp`):
+
+- `1_WoS og data.xlsx` — the original Web of Science export
+- `ManuEco_full data.xlsx` — the GPT classifications from Jacobs et al. (2025)
+- `tech_labels.csv` — the current technology-cluster label for each paper
+- `narrative_snapshot.csv` — the frozen copy of the classifications behind the original published corpus (used by the narrative page)
+
+The two CSVs were exported from the previous (personal) server's database with:
+
+```bash
+psql -U pipeline_user -d me_dashboard -h 127.0.0.1 -W -c "\copy (SELECT wos_id, feature_set, feature_key, feature_val, is_current FROM paper_features WHERE feature_key = 'technology_cluster' AND is_current = TRUE) TO '/home/ubuntu/tech_labels.csv' CSV HEADER"
+psql -U pipeline_user -d me_dashboard -h 127.0.0.1 -W -c "\copy classifications_narrative_snapshot TO '/home/ubuntu/narrative_snapshot.csv' CSV HEADER"
+```
+
+**Load in this order** (each step depends on the one before it):
+
+1. **Papers and original classifications.** `ingest_initial.py` reads the two Excel files and writes `datasets`, `papers`, `classifications` and `pipeline_runs`. It takes a while, so run it in the background and watch the log:
+
+```bash
+cd ~/initial_data
+nohup python3 -u ~/meco_dashboard/pipeline/ingest_initial.py > ~/initial_data/ingest.log 2>&1 &
+tail -f ~/initial_data/ingest.log
+```
+
+   The script prints verification counts at the end. It expects 68,917 papers, 59,599 non-review, 35,433 Decision=Y and 31,593 in the target corpus. Also confirm that `SELECT dataset_id, source, version, record_count FROM datasets;` shows one row.
+
+2. **Technology labels.** Load the CSV into `paper_features` (this needs the papers from step 1):
+
+```bash
+psql "$DATABASE_URL" -c "\copy paper_features (wos_id, feature_set, feature_key, feature_val, is_current) FROM '/home/ubuntu/initial_data/tech_labels.csv' CSV HEADER"
+```
+
+   Check that every Decision=Y paper has a label; `y_without_label` should be 0:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT COUNT(*) AS y_without_label FROM classifications c LEFT JOIN paper_features pf ON pf.wos_id = c.wos_id AND pf.feature_key = 'technology_cluster' AND pf.is_current WHERE c.is_current AND c.decision = 'Y' AND pf.wos_id IS NULL;"
+```
+
+3. **Text-derived features.** Install `pycountry` if it is not installed yet, then run the four tasks one after another (the `technologies` task was not run here; its result comes from the CSV in step 2):
+
+```bash
+pip3 install "pycountry==26.2.16" --break-system-packages
+cd ~/meco_dashboard
+nohup bash -c 'for t in wos_categories countries institutions funding; do echo "=== $t ==="; python3 -u pipeline/text_analysis.py --task $t || exit 1; done' > ~/initial_data/text_analysis.log 2>&1 &
+tail -f ~/initial_data/text_analysis.log
+```
+
+4. **Narrative snapshot.** `schema.sql` already creates the empty `classifications_narrative_snapshot` table, so only the load is needed:
+
+```bash
+psql "$DATABASE_URL" -c "\copy classifications_narrative_snapshot FROM '/home/ubuntu/initial_data/narrative_snapshot.csv' CSV HEADER"
+```
+
+   Check that no snapshot row refers to a paper that is missing from `papers`; `snapshot_not_in_papers` should be 0:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT COUNT(*) AS snapshot_not_in_papers FROM classifications_narrative_snapshot s LEFT JOIN papers p ON p.wos_id = s.wos_id WHERE p.wos_id IS NULL;"
+```
+
+   You can also count how many snapshot rows differ from the current classifications. A non-zero number is not an error, because the snapshot is frozen on purpose:
+
+```bash
+psql "$DATABASE_URL" -c "SELECT COUNT(*) AS differing_rows FROM classifications_narrative_snapshot s JOIN classifications c ON c.wos_id = s.wos_id AND c.is_current WHERE s.decision IS DISTINCT FROM c.decision OR s.category IS DISTINCT FROM c.category OR s.ecosystem_service IS DISTINCT FROM c.ecosystem_service OR s.technology IS DISTINCT FROM c.technology;"
+```
+
+5. **Aggregate.** Build the dashboard data files from the database:
+
+```bash
+cd ~/meco_dashboard
+nohup python3 -u pipeline/aggregate.py > ~/initial_data/aggregate.log 2>&1 &
+tail -f ~/initial_data/aggregate.log
+```
+
+   Then compare the regenerated files against the committed ones with `git -C ~/meco_dashboard diff --stat -- dashboard_data`. Large unexpected differences mean something above did not load correctly.
+   
 ---
 
 ## 10. Final verification checklist
