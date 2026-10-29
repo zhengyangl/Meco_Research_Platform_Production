@@ -71,9 +71,8 @@ logger = logging.getLogger("run_pipeline")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-# Development Drive folder; replace with the production folder ID before
-# deployment (see docs/handover.md).
-DRIVE_FOLDER_ID = "1D6pNaDPJFiRqlcTpL-lux3tCyWs3HuRU"
+# Development Drive folder; 
+DRIVE_FOLDER_ID = "1PTPH4Jz4XKFrmKCY4uy2ctPKR3_MfuyP"
 PROCESSED_SUBFOLDER_NAME = "processed"
 
 DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
