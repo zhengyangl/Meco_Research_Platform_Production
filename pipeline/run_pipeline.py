@@ -71,7 +71,7 @@ logger = logging.getLogger("run_pipeline")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-# Development Drive folder; 
+# Production Drive folder: "MEco - New WoS Uploads" (owned by Sho, shared with the service account as Editor).
 DRIVE_FOLDER_ID = "1PTPH4Jz4XKFrmKCY4uy2ctPKR3_MfuyP"
 PROCESSED_SUBFOLDER_NAME = "processed"
 
