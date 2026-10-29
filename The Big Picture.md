@@ -1,49 +1,51 @@
 # The Big Picture
 
-*A plain-language introduction to what this project is, why it exists, and what you can do with it. No background in biology, ecology or data science assumed. Think of this as a preface — it sketches the idea and points you to where the real detail lives. If you want the technical story, each section links to the right document.*
+*A plain-language introduction to what we built and why. No background in biology, ecology or data science needed — think of this as a preface, the part of the book that gets you interested before the technical chapters begin. Every section points you to where the real detail lives.*
 
 ---
 
-## The one-paragraph version
+## Where this started
 
-A researcher named Dr. Shoshanah Jacobs and her group study **biomimetics** — technology that borrows ideas from nature (think velcro, copied from the burrs that stick to your socks, or building ventilation modelled on how termite mounds stay cool). Over the years they gathered two collections of research data, but both lived in spreadsheets that were hard for outside scholars to search or explore — even as more and more people asked to use them. This project turns those collections into two live, searchable platforms, and, in the process, takes a closer look at the data and raises a few questions worth exploring further. This repository holds both platforms.
+Our group studies **biomimetics** — technology that borrows ideas from nature. Velcro is the famous example: someone looked at how burrs cling to a dog's fur and turned it into a fastener. Engineers have modelled building ventilation on termite mounds, water-repellent coatings on lotus leaves, and a lot more.
 
----
+Over the years we'd built up two collections of research data on this. The problem was that both of them lived in spreadsheets. They worked fine for us, but every time another researcher asked to use them — and people kept asking — there was no good way to hand them over. You can't really search a spreadsheet of tens of thousands of rows, and you certainly can't explore it. So we decided to put both collections online, in a form anyone could actually dig into. This repository is the result: two separate platforms, kept in one place only because it makes them easier to maintain.
 
-## Two collections, two platforms
-
-The group had two separate bodies of data. Each became its own platform, and the two share nothing except this code repository — kept together only because it makes them easier to maintain.
-
-### 1. MEco — the research literature
-
-**The big idea: when we build technology "inspired by nature," are we working *with* nature, or quietly replacing it?**
-
-Nature does a lot of work for us for free — forests clean our air, wetlands filter our water, insects pollinate our crops. Scientists call these **ecosystem services**. Bio-inspired design is often held up as a greener way to build things, on the premise that copying nature's principles should help us live more lightly alongside it.
-
-But is that premise actually borne out across the field? A study by Jacobs et al. (2025) looked at the research as a whole and suggested a more uncomfortable possibility: that much "bio-inspired" technology may be designed to *replace* a natural process rather than support it — what the authors framed as a *design paradigm crisis*. It's a provocative claim, and the kind that invites you to check it for yourself.
-
-The trouble was that you couldn't. The finding sat inside a single paper as fixed charts and tables. A curious researcher, policymaker, or designer who wanted to ask their own question — which natural services get the least attention? which countries fund this work? — had no way in. You could read the conclusion, but you couldn't touch the evidence.
-
-**That's what MEco opens up.** It takes a large body of research papers (tens of thousands, spanning 2004–2025), uses an AI model to sort each one, and presents the result as two connected pages:
-
-- A **Narrative page** that walks any visitor through the main story in plain charts. Its numbers are deliberately held steady at a specific published version of the data, so a figure you cite today still means the same thing later.
-- A **Data Explorer** that lets researchers filter, search, and download the full dataset themselves — and which keeps growing as new papers are added.
-
-Explore it and you'll find that the platform's own analysis echoes the original study's central pattern — a strong lean toward replacing ecosystem services rather than supporting them — and then opens up a couple of threads the original work didn't pursue: questions about *which* academic fields are driving this research (and which, notably, are absent), and about whether even the "nature-supporting" work really speaks the language of ecology, or of engineering. We'll leave those for you to find in the data rather than spell out here.
-
-### 2. BioM — the innovation database
-
-**The big idea: a decade's worth of real bio-inspired products, finally made searchable.**
-
-Separately, the group maintains the **BioM Innovation Database**: detailed records of real-world **biomimetic innovations** — actual products and designs inspired by biology. It's one of the more detailed catalogues of its kind, built up over roughly ten years. Outside researchers keep asking to use it, but it has only ever existed as a spreadsheet that's awkward to search or analyse.
-
-BioM is the dashboard that puts those records online in a browsable form, so scholars can finally dig into questions like: are products labelled "bio-inspired" genuinely bio-inspired? How closely do they imitate the forms and processes of living systems? And what can we learn from the designers who do it best?
+While we were at it, we didn't just move the data — we took a fresh look at it, and a few things turned up that are worth a closer look. More on that below.
 
 ---
 
-## Who is this for?
+## MEco — the research literature
 
-Mainly the **researchers** who kept asking Dr. Jacobs for access to the data. More broadly, anyone curious enough to look at the evidence behind bio-inspired design for themselves rather than take a single paper's word for it.
+**The question behind it: when we build technology "inspired by nature," are we working *with* nature, or quietly replacing it?**
+
+Here's the idea the first platform is built around. Nature does an enormous amount of work for us for free — forests clean the air, wetlands filter water, insects pollinate crops. Scientists call these **ecosystem services**. And "bio-inspired" design is usually sold as the green option, the assumption being that if we copy nature, we'll tread more lightly on it.
+
+But does that actually hold up once you look across the whole field? Earlier work by Jacobs et al. (2025) suggested it might not — that a lot of bio-inspired technology seems built to *replace* a natural process rather than support it. The authors called it a *design paradigm crisis*. It's a bold claim, and honestly it's the kind of claim that makes you want to go check the evidence yourself.
+
+That turned out to be the whole problem: you couldn't. The finding was locked inside one paper as a handful of fixed charts. If you wanted to ask your own question — which natural services get ignored the most? which countries are funding this? — there was nowhere to ask it.
+
+So that's what we opened up. MEco takes a large body of research papers (tens of thousands of them, going back to 2004), has an AI model sort through each one, and lays the result out as two pages that work differently on purpose:
+
+- A **Narrative page** that walks anyone through the main story in plain charts. We deliberately froze its numbers to one published version of the data, so a figure you cite from it today will still mean the same thing a year from now.
+- A **Data Explorer** for researchers who want to get their hands dirty — filter, search, download the whole thing — and it keeps growing as new papers come in.
+
+When we ran the analysis, our own data echoed that earlier study's central pattern: a strong tilt toward replacing ecosystem services rather than supporting them. But a couple of things showed up that the original work hadn't gone into — about *which* academic fields are doing all this research (and which ones are strikingly missing), and about whether the "nature-supporting" work really talks like ecology or more like engineering. We won't give those away here. They're more fun to find in the data, and that's exactly what the Explorer is for.
+
+---
+
+## BioM — the innovation database
+
+**A decade of real bio-inspired products, finally searchable.**
+
+The second collection is the **BioM Innovation Database** — detailed records of actual biomimetic products and designs, not research papers but real innovations. It's one of the more detailed catalogues of its kind, and our group has been building it for about ten years. Same story as before: outside researchers keep wanting to use it, and until now it was stuck in a spreadsheet nobody could comfortably search.
+
+BioM is the dashboard that finally puts it online in a browsable form, so people can dig into the questions it was built to answer: are products labelled "bio-inspired" really bio-inspired? How closely do they actually imitate living systems? And what can we learn from the designers who get it right?
+
+---
+
+## Who we made this for
+
+Mostly the **researchers** who kept asking us for the data in the first place. But really, anyone curious enough to look at the evidence behind bio-inspired design for themselves, instead of taking any one paper's word for it.
 
 ---
 
