@@ -95,7 +95,7 @@ If anything about this step is unclear, the official reference is the [PostgreSQ
 
 ### 3.2 Build the database and tables
 
-A ready-made script does this for you: `schema.sql` (in the repo root). It creates the database, the `pipeline_user` role, all six tables, and the indexes that make the versioning pattern work. **This script has been tested end-to-end against a real PostgreSQL 16 instance** — every statement in it runs cleanly.
+A ready-made script does this for you: `schema.sql` (in the repo root). It creates the database, the `pipeline_user` role, all seven tables, and the indexes that make the versioning pattern work. **This script has been tested end-to-end against a real PostgreSQL 16 instance** — every statement in it runs cleanly.
 
 1. Upload it to the server (from your own computer, in a new Terminal window — don't close your SSH session):
    ```bash
@@ -112,7 +112,7 @@ A ready-made script does this for you: `schema.sql` (in the repo root). It creat
    sudo -u postgres psql < ~/schema.sql
    ```
    Use the `<` redirect rather than `-f ~/schema.sql`: the `postgres` system user cannot read files inside `/home/ubuntu`, so `-f` fails with a permission-denied error, whereas with `<` your own shell opens the file.
-4. You should see a series of `CREATE DATABASE`, `CREATE ROLE`, `CREATE TABLE`, and `GRANT` confirmations, ending with a list of the 6 tables and two `0`-row counts (the database is empty until the pipeline adds data). If you see errors instead, don't proceed — fix the error first (the most common cause is forgetting to change the placeholder password, or running the script twice against a database that already exists).
+4. You should see a series of `CREATE DATABASE`, `CREATE ROLE`, `CREATE TABLE`, and `GRANT` confirmations, ending with a list of the 7 tables and two `0`-row counts (the database is empty until the pipeline adds data). If you see errors instead, don't proceed — fix the error first (the most common cause is forgetting to change the placeholder password, or running the script twice against a database that already exists).
 
 Write down what you used for the database name, username, and password — you'll need them in Section 9. If you followed this guide exactly, they are:
 
@@ -350,7 +350,7 @@ To use these variables in an interactive SSH session (for example to run the pip
 Work through these in order. If any step fails, stop and fix it before moving to the next — later steps assume earlier ones work.
 
 - [ ] `ssh` into the server successfully
-- [ ] `psql -U pipeline_user -d me_dashboard -h 127.0.0.1 -W` connects and shows 6 tables via `\dt`
+- [ ] `psql -U pipeline_user -d me_dashboard -h 127.0.0.1 -W` connects and shows 7 tables via `\dt`
 - [ ] `pip3 list` shows `pandas`, `psycopg2`, `sentence-transformers` installed
 - [ ] After loading `.env` (Section 9), `echo $DATABASE_URL` (etc.) shows the values you set, not blank
 - [ ] `python3 pipeline/classify.py --dry-run --input <any small test file>` runs without an environment-variable error (see `handover.md` for what a real dry run looks like)
