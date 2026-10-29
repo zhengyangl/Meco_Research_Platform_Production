@@ -1016,3 +1016,13 @@ if _open_view is not None and _open_view[0] == "compare":
             st.rerun()
 
     show_compare(_open_view[1])
+
+with st.expander("How to Cite"):
+    st.caption("Please cite this database as:")
+    st.code(
+        "Li, Z., Zhang, J., Wanieck, K., Wu, Y., Rait, K., Patel, S., Gillis, D., & Jacobs, S. (2026). "
+        "BioM Innovation Database. Manufactured Ecosystems. "
+        "https://biom.manufacturedecosystems.com",
+        language=None,
+        wrap_lines=True,
+    )
