@@ -43,10 +43,10 @@ Nothing here runs on its own by default — someone needs to trigger each piece,
 
 Run these from the pipeline folder, after loading the server's `.env` in the same terminal session:
 
-​```bash
+```bash
 cd ~/meco_dashboard/pipeline
 set -a && source ../.env && set +a
-​```
+```
 
 Add `--dry-run` to `new-data` to list the files it would process without downloading, classifying or writing anything.
 
@@ -89,7 +89,7 @@ The same commands apply to `biom-dashboard`. After pulling new code (`cd ~/meco_
 - Both apps listen on `127.0.0.1` only. nginx is the public entry point (ports 80/443) and forwards each hostname to its app. Config files: `/etc/nginx/sites-available/meco-dashboard` and `biom-dashboard`.
 - HTTPS uses one Let's Encrypt certificate covering both hostnames, issued with certbot and renewed automatically (`certbot.timer`). To check renewal: `sudo certbot renew --dry-run`.
 - The AWS security group allows ports 80 and 443 from anywhere and SSH (port 22) only from specific IP addresses. Ports 8501/8502 are not exposed.
-- DNS: the `meco` and `biom` A records at the domain registrar point to the server's static (Elastic) IP. If the server is ever rebuilt with a new IP, update both records. **[To fill in: who holds the registrar account, and whether domain auto-renewal is on.]**
+- DNS: the `meco` and `biom` A records at the domain registrar point to the server's static (Elastic) IP. If the server is ever rebuilt with a new IP, update both records. The domain `manufacturedecosystems.com` is registered through Squarespace Domains; the registrant is Dr. Jacobs. Auto-renewal, WHOIS privacy and the domain lock are all on, and the next renewal date is November 9, 2026. Changes to the DNS records are made in the Squarespace account that manages the domain.
 - The ME website (manufacturedecosystems.com) links to the two pages from its navigation and opens them in a new window. They are deliberately **not** embedded in iframes: an iframe leaves the website's navigation and footer around a data platform and makes the layout hard to control.
 - **Updating code:** edit on GitHub, then `cd ~/meco_dashboard && git pull` on the server and restart the affected service (`meco-dashboard` and/or `biom-dashboard`).
 - **Pinned versions:** MEco runs Streamlit 1.66.0 and `streamlit-aggrid` 1.2.1.post2; BioM runs Streamlit 1.64.0 (see each `requirements.txt`). `pyarrow` is held at 24.0.0 on the server as a precaution against a crash reported with 26.0.0. The page styling depends on Streamlit's internal page structure, which changes between versions (for example, pill buttons changed from `data-testid="stBaseButton-pills"` to `data-variant="pills"`). **Before upgrading Streamlit, check the narrative page's pill buttons and the Explorer's tabs and sidebar filters.**
@@ -247,4 +247,4 @@ Real issues hit while building and testing this pipeline, in case they come up a
 
 - **`cluster_technologies()`'s low-confidence assignments aren't blocked, only logged.** A new paper with a technology phrase that doesn't closely resemble any of the 25 existing clusters still gets force-assigned to the nearest one. If the "low confidence" count in a run's output starts looking large, that's a signal the 25 clusters may need revisiting (see `data_dictionary.md` Section 7) — the pipeline won't decide that on its own.
 - **Hosting.** Both dashboards are self-hosted on the EC2 server described in Section 3.2. Any older copy on Streamlit Community Cloud is no longer the source of truth and can be retired. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
-- **The dashboard is still hosted on Streamlit Community Cloud, not the self-hosted EC2 + nginx setup described in `environment_setup.md` Section 11.** That migration is planned — motivated by removing Streamlit's free-tier branding icons for a cleaner embed into the ME website — but hasn't been executed yet. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
+- **The full `new-data` chain hasn't been run end-to-end against real new papers in production yet.** The production Drive folder is shared with the service account as Editor, and `run_pipeline.py new-data --dry-run` connects to it without errors; it has not yet been tested with a file in the folder. The individual pieces (`classify.py`, `ingest_incremental.py`, `text_analysis.py`) have each been tested separately, and `cluster_technologies()` specifically has been run for real against the live database (successfully recomputed centroids from 35,433 labeled papers). But the full chain — a real new file, classified, auto-ingested, and features extracted, all through `run_pipeline.py new-data` without `--dry-run` — has not yet been exercised together. Do this as an early test with a small batch before relying on it for anything real.
