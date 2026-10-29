@@ -68,7 +68,7 @@ sudo systemctl enable postgresql   # so it restarts automatically on reboot
 
 ### 3.1 Allow password login
 
-By default, PostgreSQL only trusts local connections from the `postgres` system user — nothing else. You need to open a password-based login for the pipeline's database user.
+On Ubuntu 22.04/24.04 the default `pg_hba.conf` already allows password login over TCP from `127.0.0.1`, so on the production server (Ubuntu 24.04, PostgreSQL 16) no change was needed in this section. Skip to Section 3.2 and come back only if the connection test in Section 3.3 fails with an authentication error.
 
 Find the config files (the exact path includes the version number, e.g. `16`):
 
@@ -77,7 +77,7 @@ sudo find /etc/postgresql -name "pg_hba.conf"
 sudo find /etc/postgresql -name "postgresql.conf"
 ```
 
-Edit `pg_hba.conf` and add this line at the end:
+Only if that test fails, edit `pg_hba.conf` and add this line at the end:
 
 ```
 host    all             all             127.0.0.1/32            md5
@@ -109,8 +109,9 @@ A ready-made script does this for you: `schema.sql` (in the repo root). It creat
    ```
 3. Run it:
    ```bash
-   sudo -u postgres psql -f ~/schema.sql
+   sudo -u postgres psql < ~/schema.sql
    ```
+   Use the `<` redirect rather than `-f ~/schema.sql`: the `postgres` system user cannot read files inside `/home/ubuntu`, so `-f` fails with a permission-denied error, whereas with `<` your own shell opens the file.
 4. You should see a series of `CREATE DATABASE`, `CREATE ROLE`, `CREATE TABLE`, and `GRANT` confirmations, ending with a list of the 6 tables and two `0`-row counts (the database is empty until the pipeline adds data). If you see errors instead, don't proceed — fix the error first (the most common cause is forgetting to change the placeholder password, or running the script twice against a database that already exists).
 
 Write down what you used for the database name, username, and password — you'll need them in Section 9. If you followed this guide exactly, they are:
@@ -195,10 +196,9 @@ Get the repo onto the server first (Section 6), then, from the repo folder:
 cd ~/meco_dashboard
 pip3 install -r requirements.txt --break-system-packages
 pip3 install -r requirements_pipeline.txt --break-system-packages
-pip3 install "streamlit==1.66.0" --break-system-packages
 ```
 
-The last line pins Streamlit to the version this platform was tested against (1.66.0). `requirements.txt` does not pin it, and `app.py` uses `st.components.v1.html`, which Streamlit has announced it will remove in a future release — an unpinned install could pull a newer version and break the narrative page. Don't upgrade Streamlit without re-testing.
+`requirements.txt` pins Streamlit to 1.66.0 and `streamlit-aggrid` to 1.2.1.post2, the versions this platform was tested against. The page styling depends on Streamlit's internal page structure, so don't upgrade Streamlit without re-testing (see `handover.md` Section 3.2, "Pinned versions"). `app.py` also uses `st.components.v1.html`, which Streamlit has announced it will remove in a future release.
 
 These cover the MEco platform. The BioM dashboard has its own pinned `biom-dashboard/requirements.txt` (different package versions), so it gets its own virtual environment to keep the two from interfering:
 
@@ -283,7 +283,7 @@ Official reference: [Create service accounts](https://docs.cloud.google.com/iam/
 scp -i ~/Downloads/my-aws-key.pem /path/to/your-key.json ubuntu@<SERVER_PUBLIC_IP>:~/service-account.json
 ```
 
-Then, on the server, restrict it to your user: `chmod 600 ~/service-account.json`.
+Then, on the server, move it into a private folder and restrict it to your user: `mkdir -p -m 700 ~/secrets && mv ~/service-account.json ~/secrets/service_account.json && chmod 600 ~/secrets/service_account.json`.
 
 ### 8.4 Share each Google resource with the service account
 
@@ -334,7 +334,7 @@ chmod 600 .env
 ```
 DATABASE_URL=postgresql://pipeline_user:<your DB password>@127.0.0.1:5432/me_dashboard
 OPENROUTER_API_KEY=<your OpenRouter key>
-GOOGLE_SERVICE_ACCOUNT_FILE=/home/ubuntu/service-account.json
+GOOGLE_SERVICE_ACCOUNT_FILE=/home/ubuntu/secrets/service_account.json
 REVIEW_SHEET_ID=<review-queue sheet ID>
 FEEDBACK_SHEET_ID=<misclassification-feedback sheet ID>
 ```
@@ -354,19 +354,20 @@ Work through these in order. If any step fails, stop and fix it before moving to
 - [ ] `pip3 list` shows `pandas`, `psycopg2`, `sentence-transformers` installed
 - [ ] After loading `.env` (Section 9), `echo $DATABASE_URL` (etc.) shows the values you set, not blank
 - [ ] `python3 pipeline/classify.py --dry-run --input <any small test file>` runs without an environment-variable error (see `handover.md` for what a real dry run looks like)
-- [ ] `python3 pipeline/run_pipeline.py new-data --dry-run` successfully lists files in the Drive folder (confirms the Google service account setup works end to end)
+- [ ] `cd ~/meco_dashboard/pipeline && python3 run_pipeline.py new-data --dry-run` successfully lists files in the Drive folder (confirms the Google service account setup works end to end)
+
 ---
 
 ## 11. Self-Hosting the Dashboard on EC2 (nginx + systemd)
 
-*Status: this is the target architecture, not yet executed — the dashboard is currently still on Streamlit Community Cloud. See `handover.md` Section 9.*
+*Status: this describes the production deployment as built in October 2026 (EC2 + nginx + systemd, Let's Encrypt HTTPS). Day-to-day operation is covered in `handover.md` Section 3.2.*
 
 Two platforms were evaluated and rejected before landing on this approach:
 
 - **Staying on Streamlit Community Cloud long-term** — free, but the free tier permanently injects two branding icons ("Hosted with Streamlit", a creator-profile badge) into the bottom-right corner of every app. There is no official way to remove them; only self-hosting outside Community Cloud removes them, since they're injected by the hosting layer itself, not the Streamlit framework.
 - **Streamlit in Snowflake (SiS)** — rejected. `explorer.py`'s main table depends entirely on AgGrid (`GridOptionsBuilder`, custom `JsCode` renderers for DOI links and paradigm color-coding), and AgGrid does not run inside SiS's sandbox — this is a known platform limitation (confirmed via Snowflake's own community forum), not something a package install fixes. Migrating would mean rewriting the Explorer's table with `st.dataframe` (losing custom cell rendering) and rebuilding the data-loading layer to read from Snowflake Stages instead of local parquet/JSON. Not worth it for this project.
 
-The plan below keeps every line of existing code unchanged — both platforms run exactly as they do today, just self-hosted instead of on Community Cloud.
+Both platforms run the same code as they did on Community Cloud, with one caveat: the page styling depends on the Streamlit version (see `handover.md` Section 3.2, "Pinned versions").
 
 **Layout.** Two Streamlit processes, one subdomain each:
 
@@ -379,7 +380,7 @@ The working directory matters: Streamlit loads `.streamlit/config.toml` (and, fo
 
 ### 11.1 Why a domain is required (not just the server's IP)
 
-The ME website (Squarespace) is served over HTTPS. Browsers block an HTTPS page from embedding an HTTP iframe ("mixed content"). So the dashboard must also run over HTTPS — and Let's Encrypt (the free certificate authority used below) only issues certificates for domain names, never for a bare IP address.
+The dashboards are public web pages and should be served over HTTPS, and Let's Encrypt (the free certificate authority used below) only issues certificates for domain names, never for a bare IP address. (The ME website links to the dashboards rather than embedding them; see Section 11.8.)
 
 The simplest path: ask whoever manages the lab's domain to add two subdomains (`meco` and `biom`, below) pointed at the EC2 server. If the domain is already owned, adding subdomains costs nothing.
 
@@ -442,7 +443,7 @@ After=network.target
 [Service]
 User=ubuntu
 WorkingDirectory=/home/ubuntu/meco_dashboard/biom-dashboard
-ExecStart=/home/ubuntu/meco_dashboard/biom-dashboard/.venv/bin/streamlit run app.py --server.port 8502 --server.address 127.0.0.1 --server.headless true
+ExecStart=/home/ubuntu/meco_dashboard/biom-dashboard/.venv/bin/python -m streamlit run app.py --server.port 8502 --server.address 127.0.0.1 --server.headless true
 Restart=always
 
 [Install]
@@ -461,11 +462,11 @@ sudo systemctl start meco-dashboard biom-dashboard
 
 ### 11.5 nginx reverse proxy — WebSocket headers are not optional
 
-```bash
-sudo nano /etc/nginx/sites-available/meco
-```
+Create one file per subdomain. First MEco:
 
-One `server` block per subdomain:
+```bash
+sudo nano /etc/nginx/sites-available/meco-dashboard
+```
 
 ```nginx
 server {
@@ -479,10 +480,20 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
     }
 }
+```
 
+Then BioM:
+
+```bash
+sudo nano /etc/nginx/sites-available/biom-dashboard
+```
+
+```nginx
 server {
     listen 80;
     server_name biom.manufacturedecosystems.com;
@@ -494,22 +505,25 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400;
     }
 }
 ```
 
-**The `proxy_http_version 1.1` and `Upgrade`/`Connection` lines are required in both blocks, not optional.** Streamlit relies on a WebSocket connection for interactivity (filters, reruns). Without these exact lines, the page loads visually but nothing responds when clicked — a nginx config that looks "basically right" but is missing these will produce a dashboard that appears broken with no error message anywhere.
+**The `proxy_http_version 1.1` and `Upgrade`/`Connection` lines are required in both files, not optional.** Streamlit relies on a WebSocket connection for interactivity (filters, reruns). Without these exact lines, the page loads visually but nothing responds when clicked — an nginx config that looks "basically right" but is missing these will produce a dashboard that appears broken with no error message anywhere.
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/meco /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/meco-dashboard /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/biom-dashboard /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
 
 ### 11.6 DNS + HTTPS
 
-1. Have whoever controls the domain's DNS add two A records, both pointing to the EC2 instance's Elastic IP: `meco` and `biom`. Wait until they resolve (`nslookup meco.manufacturedecosystems.com` should return the Elastic IP) before the next step — certbot fails if DNS hasn't propagated.
+1. At the domain's DNS provider (for this project, the domain is registered with Squarespace Domains), add two A records, `meco` and `biom`, both pointing to the EC2 instance's Elastic IP. Wait until they resolve (`nslookup meco.manufacturedecosystems.com` should return the Elastic IP) before the next step — certbot fails if DNS hasn't propagated.
 2. Install the certificates:
 
 ```bash
@@ -517,45 +531,22 @@ sudo apt install certbot python3-certbot-nginx -y
 sudo certbot --nginx -d meco.manufacturedecosystems.com -d biom.manufacturedecosystems.com
 ```
 
-`certbot` rewrites the nginx config for HTTPS automatically and sets up auto-renewal (Let's Encrypt certificates expire every 90 days; no manual renewal needed after this).
+certbot asks for an email address (used for expiry notices) and to accept the terms, and offers to redirect HTTP to HTTPS — choose the redirect. It then rewrites both nginx files for HTTPS and sets up automatic renewal (Let's Encrypt certificates last 90 days; renewal runs from a systemd timer, so no manual step is needed).
+
+3. Check that renewal works: `sudo certbot renew --dry-run` should report success, and `systemctl list-timers | grep certbot` should show the timer scheduled.
 
 ### 11.7 Security group
 
-In the AWS Console, confirm ports **80 and 443** are open to `0.0.0.0/0`. Ports 8501/8502 should **not** be open externally — nginx is the only thing that needs to reach them, and it does so over localhost (the systemd units also bind them to `127.0.0.1`). SSH (22) should stay restricted to your own IP.
+In the AWS Console, confirm ports **80 and 443** are open to `0.0.0.0/0`. Ports 8501/8502 should **not** be open externally — nginx is the only thing that needs to reach them, and it does so over localhost (the systemd units also bind them to `127.0.0.1`). SSH (22) should stay restricted to your own IP. When your public IP changes (a new network, a new ISP lease), SSH will time out until you edit the port-22 rule and set Source to "My IP" (see `handover.md` Section 6).
 
-### 11.8 Embedding into the Squarespace site
+### 11.8 Linking from the Squarespace site
 
-Requires a Squarespace **Business plan or higher** — the Embed/Code block used here isn't available on the Personal plan.
+The two dashboards are **not** embedded in the ME website with iframes. An iframe test showed that the website's header, footer and blank space end up around the app and are hard to control, and it puts the website's navigation around a data platform. Instead, the website links to each dashboard and opens it in a new window:
 
-1. Edit the target page → add an **Embed** block (or **Code** block, same effect) → paste the iframe for that page.
+1. In Squarespace, open the Main Navigation and add a folder for the two tools.
+2. Inside it, add two **external links** with "open in new window" turned on: "Literature Explorer" → `https://meco.manufacturedecosystems.com`, and "Innovation Database" → `https://biom.manufacturedecosystems.com`.
 
-MEco narrative page:
-
-```html
-<iframe src="https://meco.manufacturedecosystems.com/?embed=true"
-        style="height: 1200px; width: 100%; border: none;">
-</iframe>
-```
-
-Data Explorer (a page of the same MEco app):
-
-```html
-<iframe src="https://meco.manufacturedecosystems.com/explorer?embed=true"
-        style="height: 1200px; width: 100%; border: none;">
-</iframe>
-```
-
-BioM Innovation Database:
-
-```html
-<iframe src="https://biom.manufacturedecosystems.com/?embed=true"
-        style="height: 1200px; width: 100%; border: none;">
-</iframe>
-```
-
-2. `?embed=true` removes Streamlit's top toolbar. On a self-hosted app (unlike Community Cloud), there's no bottom-right branding to worry about — it only exists on the free hosting tier.
-3. **iframe height is fixed, app content is not.** If a user expands something or a filtered table grows longer than the iframe's set height, it either scrolls inside the iframe (double-scrollbar) or gets cut off. There's no official auto-resize; starting with a generous fixed height (1200px+) is the practical workaround.
-4. Test at mobile width specifically before considering this done — the Explorer's sidebar filters are especially prone to being squeezed in a narrow iframe.
+Nothing needs to change on the server for this. Link labels can be renamed in Squarespace at any time.
 
 ### 11.9 Cost
 
@@ -577,6 +568,6 @@ Roughly **$20–24/month** total, versus $0 on Streamlit Community Cloud. Get an
 - [ ] `https://biom.manufacturedecosystems.com` loads the BioM dashboard with its own theme and its case table
 - [ ] The Explorer's sidebar filters actually filter the table when clicked (confirms the WebSocket proxy headers are correct — if filters don't respond, revisit Section 11.5)
 - [ ] Reboot the EC2 instance and confirm both apps (and PostgreSQL) come back up on their own (confirms `systemctl enable` took effect)
-- [ ] Embed the iframe on a Squarespace test page and check it at both desktop and mobile widths
+- [ ] The ME website's navigation links open both dashboards in a new window
 
 Once all of these pass, the environment is ready. Move on to `handover.md` for how to actually operate the platform day to day.
