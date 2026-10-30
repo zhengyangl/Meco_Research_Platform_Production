@@ -1,6 +1,6 @@
 # Handover Guide
 
-*Last updated: October 29, 2026*
+*Last updated: October 30, 2026*
 
 This is the day-to-day operating manual. For one-time setup (AWS, database, credentials), see `environment_setup.md` — do that first if you haven't already. For how the system is designed and why, see `architecture.md`.
 
@@ -52,7 +52,7 @@ Add `--dry-run` to `new-data` to list the files it would process without downloa
 
 | Command | When to run it | Suggested cadence |
 |---|---|---|
-| `python3 run_pipeline.py new-data` | After a researcher uploads a new WoS export to Drive | On demand, or a daily cron check |
+| `python3 run_pipeline.py new-data` | After a researcher uploads a new WoS export to Drive | On demand, or the weekly scheduled check described in Section 3.3 |
 | `python3 run_pipeline.py reviewed` | To pick up whatever's been finished in the Review Sheet | Daily |
 | `python3 run_pipeline.py aggregate` | To refresh the narrative page's files and the Explorer's fallback snapshot | Weekly |
 
@@ -93,7 +93,28 @@ The same commands apply to `biom-dashboard`. After pulling new code (`cd ~/meco_
 - The ME website (manufacturedecosystems.com) links to the two pages from its navigation and opens them in a new window. They are deliberately **not** embedded in iframes: an iframe leaves the website's navigation and footer around a data platform and makes the layout hard to control.
 - **Updating code:** edit on GitHub, then `cd ~/meco_dashboard && git pull` on the server and restart the affected service (`meco-dashboard` and/or `biom-dashboard`).
 - **Pinned versions:** MEco runs Streamlit 1.66.0 and `streamlit-aggrid` 1.2.1.post2; BioM runs Streamlit 1.64.0 (see each `requirements.txt`). `pyarrow` is held at 24.0.0 on the server as a precaution against a crash reported with 26.0.0. The page styling depends on Streamlit's internal page structure, which changes between versions (for example, pill buttons changed from `data-testid="stBaseButton-pills"` to `data-variant="pills"`). **Before upgrading Streamlit, check the narrative page's pill buttons and the Explorer's tabs and sidebar filters.**
-  
+
+### 3.3 Scheduled weekly check (planned, not yet enabled)
+
+Nothing currently runs on a schedule. The intended setup is a weekly check of the Drive upload folder: if there are new files, `new-data` processes them; if there are none, it stops without doing anything.
+
+**Why it is not enabled yet.** The full `new-data` chain has not yet been run end to end on a real batch (see Section 9). An unattended run calls the paid classification model and writes to the production database, so the first real run should be done by hand and checked. It is also not yet verified what happens to the database if a run fails part-way: the files stay in the upload folder and would be picked up again by the next run.
+
+**Before enabling:**
+
+1. Run `new-data` by hand on a small real batch and check the results (new rows in the Explorer, the review sheet, the log output).
+2. Confirm that re-running after a failure does not create duplicate rows.
+
+**To enable.** On the server, run `crontab -e` and add this line (it runs Mondays at 13:00 server time, which is UTC; that is 8:00 or 9:00 in Toronto depending on daylight saving):
+
+```
+0 13 * * 1 flock -n /tmp/meco_pipeline.lock sh -c 'cd /home/ubuntu/meco_dashboard/pipeline && set -a && . ../.env && set +a && /usr/bin/python3 -u run_pipeline.py new-data' >> /home/ubuntu/pipeline_cron.log 2>&1
+```
+
+Run the quoted command once by hand before relying on it, because cron starts with a much emptier environment than an SSH session. `flock` stops a second run from starting while the first is still going. Output goes to `~/pipeline_cron.log`; nobody is notified if a run fails, so check this log after an upload. To turn the schedule off, remove the line with `crontab -e`.
+
+**Note for anyone using the upload folder.** Once the schedule is on, every file in the "MEco - New WoS Uploads" folder is processed at the next run. Do not leave files there that should not be classified. `aggregate` is a separate step and is still run by hand.
+
 ---
 
 ## 4. Connecting to the server and database
@@ -247,4 +268,4 @@ Real issues hit while building and testing this pipeline, in case they come up a
 
 - **`cluster_technologies()`'s low-confidence assignments aren't blocked, only logged.** A new paper with a technology phrase that doesn't closely resemble any of the 25 existing clusters still gets force-assigned to the nearest one. If the "low confidence" count in a run's output starts looking large, that's a signal the 25 clusters may need revisiting (see `data_dictionary.md` Section 7) — the pipeline won't decide that on its own.
 - **Hosting.** Both dashboards are self-hosted on the EC2 server described in Section 3.2. Any older copy on Streamlit Community Cloud is no longer the source of truth and can be retired. Streamlit in Snowflake was evaluated as an alternative and rejected: the Explorer's AgGrid-based table doesn't run inside Snowflake's sandbox, and switching would mean losing the current custom cell rendering (DOI links, paradigm color-coding).
-- **The full `new-data` chain hasn't been run end-to-end against real new papers in production yet.** The production Drive folder is shared with the service account as Editor, and `run_pipeline.py new-data --dry-run` connects to it without errors; it has not yet been tested with a file in the folder. The individual pieces (`classify.py`, `ingest_incremental.py`, `text_analysis.py`) have each been tested separately, and `cluster_technologies()` specifically has been run for real against the live database (successfully recomputed centroids from 35,433 labeled papers). But the full chain — a real new file, classified, auto-ingested, and features extracted, all through `run_pipeline.py new-data` without `--dry-run` — has not yet been exercised together. Do this as an early test with a small batch before relying on it for anything real.
+- **The full `new-data` chain hasn't been run end-to-end against real new papers in production yet.** The production Drive folder is shared with the service account as Editor, and `run_pipeline.py new-data --dry-run` found a placeholder test file in the folder when run on October 30, 2026, so Drive detection works; no real file has been processed yet. The individual pieces (`classify.py`, `ingest_incremental.py`, `text_analysis.py`) have each been tested separately, and `cluster_technologies()` specifically has been run for real against the live database (successfully recomputed centroids from 35,433 labeled papers). But the full chain — a real new file, classified, auto-ingested, and features extracted, all through `run_pipeline.py new-data` without `--dry-run` — has not yet been exercised together. Do this as an early test with a small batch before relying on it for anything real.
