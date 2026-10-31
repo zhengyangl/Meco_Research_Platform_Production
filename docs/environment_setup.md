@@ -372,7 +372,7 @@ nohup python3 -u ~/meco_dashboard/pipeline/ingest_initial.py > ~/initial_data/in
 tail -f ~/initial_data/ingest.log
 ```
 
-   The script prints verification counts at the end. It expects 68,917 papers, 59,599 non-review, 35,433 Decision=Y and 31,593 in the target corpus. Also confirm that `SELECT dataset_id, source, version, record_count FROM datasets;` shows one row.
+   The script prints verification counts at the end. It expects 68,917 papers, 59,599 non-review and 35,433 Decision=Y. Also confirm that `SELECT dataset_id, source, version, record_count FROM datasets;` shows one row.
 
 2. **Technology labels.** Load the CSV into `paper_features` (this needs the papers from step 1):
 
