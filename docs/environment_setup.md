@@ -635,9 +635,9 @@ Nothing needs to change on the server for this. Link labels can be renamed in Sq
 | EC2 instance (t3.small) | ~$15.18 |
 | EBS storage | ~$1–3 |
 | Elastic IP (public IPv4 address) | ~$3.65 |
-| Domain/subdomain | $0 if added under an existing domain |
+| Domain/subdomain | $0 |
 | SSL certificate (Let's Encrypt) | $0 |
-| Outbound data transfer | $0 (covered by AWS's free 100GB/month tier at this project's traffic level) |
+| Outbound data transfer | $0 |
 
 Roughly **$20–24/month** total, versus $0 on Streamlit Community Cloud. Get an exact figure after a month of real usage via AWS Console → Billing → Cost Explorer, rather than relying on the estimate above — small extras (CloudWatch, EBS snapshots) sometimes show up that aren't obvious in advance.
 
